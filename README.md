@@ -70,11 +70,21 @@ You may also customize yout workflow with .cargo/config.toml.
     - [x] run PoC PWM output
     - [ ] PWM + DMA for audio output (TIM0 DOES NOT WORK WITH DMA)
     - [ ] speaker (current revision is fubar)
-    - [ ] check power consumption + sleep modes
-    - [ ] check CR2032/USB power XORing
-    - [ ] run RTC
-    - [ ] check onboard flash
+    - [ ] power
+        - [ ] check power consumption + sleep modes
+        - [ ] check CR2032/USB power XORing
+        - [ ] check if LDO stable
+    - [x] clocks
+        - [x] check LSE (waveform visible without activating in code, probing glitches time counting without halting MCU)
+        - [x] check HSE (probing glitches UART baudrate)
+        - [x] check RTC (set/read works, counting works)
+    - [ ] onboard flash
+        - [x] chip ID + read
+        - [ ] write
+        - [ ] DMA
 - [ ] firmware
+    - [ ] integrate embassy async
+    - [ ] UART not working in debug builds
     - [ ] UART logging
     - [ ] run bluetooth scan/ADV reception
     - [ ] run BLE connection
