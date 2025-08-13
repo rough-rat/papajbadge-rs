@@ -4,7 +4,8 @@
 use embedded_hal_local::delay::DelayNs;
 use hal::delay::CycleDelay;
 use hal::gpio::{Level, Output, OutputDrive};
-use qingke::riscv::asm::wfi;
+use hal::with_safe_access;
+use qingke::riscv::asm::{wfi, nop};
 use {ch58x_hal as hal};
 
 use hal::uart::UartTx;
@@ -29,6 +30,26 @@ fn get_char_for_t(t: i32) -> u8 {
     part1 + part2
 }
 
+unsafe fn enable_rwa() -> bool {
+    let reg_ptr = 0x4000_1040 as *mut u8;
+
+    *reg_ptr = 0x57;
+    *reg_ptr = 0xA8;
+
+    // sys.safe_access_sig().write(|w| {
+    //     // enable RTC timer wakeup
+    //     w.safe_access_sig().bits(0x57)
+    // });
+
+    // sys.safe_access_sig().write(|w| {
+    //     // enable RTC timer wakeup
+    //     w.safe_access_sig().bits(0xA8)
+    // });
+    nop(); nop();
+    let sys = unsafe { &*SYS::PTR };
+    sys.safe_access_sig().read().safe_acc_act().bit_is_set()
+}
+
 #[qingke_rt::entry]
 fn main() -> ! {
     let mut config = hal::Config::default();
@@ -42,15 +63,20 @@ fn main() -> ! {
     let mut delay = CycleDelay;
 
     // LED PA8
-    // let mut led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
+    let mut led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
     let mut spk = Output::new(p.PA9, Level::High, OutputDrive::_20mA);
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
-    ena.set_low();
+    ena.set_high();
 
     let mut serial = UartTx::new(p.UART0, p.PB7, Default::default()).unwrap();
     let _ = serial.blocking_flush();
 
     writeln!(serial, "\n\n\nHello World!").unwrap();
+
+    loop{
+        led.toggle();
+        delay.delay_ms(10);
+    }
 
 
     // let mut spi_config = hal::spi::Config::default();
@@ -105,27 +131,43 @@ fn main() -> ! {
     let sys = unsafe { &*SYS::PTR };
     let pfic = unsafe { &*PFIC::PTR };
 
-    sys.slp_wake_ctrl().modify(|_, w| {
-        w.slp_rtc_wake().bit(true)
-    });
-
     unsafe{
-        sys.rtc_mode_ctrl().modify(|_, w| {
-            w.rtc_tmr_mode().bits(0b011).rtc_tmr_en().bit(true)
+        // let is_safe = enable_rwa();
+        // if !is_safe {
+        //     writeln!(serial, "Failed to enable RWA, exiting...").unwrap();
+        // }
+        with_safe_access(||{
+            // wakeup from RTC ISR, memory stays active (?)
+            sys.slp_wake_ctrl().modify(|_, w| {
+                w.slp_rtc_wake().bit(true).wake_ev_mode().bit(true)
+            });
+
+            // 520 cycles of delay
+            sys.slp_power_ctrl().modify(|_, w| {
+                w.wake_dly_mod().bits(0b11)
+            });
+            // enable RTC timer every 1s
+            sys.rtc_mode_ctrl().modify(|_, w| {
+                w.rtc_tmr_mode().bits(0b011).rtc_tmr_en().bit(true)
+            });
         });
     }
-    // pfic.sctlr().modify(|_, w| {
-    //     w.sleepdeep().bit(true)
-    // });
+    // u want deepsleep?
+    pfic.sctlr().modify(|_, w| {
+        w.sleepdeep().bit(false)
+    });
 
     let mut counter: u32 = 0;
-    loop{
-        // sys.power_plan().modify(|_, w| {
-        //     w.pwr_sys_en().bit(false)
-        // });
-
+    loop{     
         unsafe{
+            enable_rwa();
+            // write 0 to enable, should sleep on next WFI
+            sys.power_plan().modify(|_, w| {
+                w.pwr_sys_en().bit(false)
+            });
+
             wfi();
+            // clear RTC timer flag
             sys.rtc_flag_ctrl().modify(|_, w| {
                 w.rtc_tmr_clr().bit(true)
             });
