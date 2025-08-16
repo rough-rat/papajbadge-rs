@@ -80,7 +80,7 @@ You may also customize yout workflow with .cargo/config.toml.
         - [ ] check power consumption + sleep modes
             - [x] run (6mA @ 6mhz)
             - [x] idle (1.6mA, agrees with datasheet)
-            - [x] halt (~250uA, should be 320uA)
+            - [x] halt (150-250uA, should be 320uA)
             - [ ] sleep
         - [x] check CR2032/USB power XORing (removed in rev2)
         - [x] check if LDO stable (removed in rev2)
@@ -92,12 +92,14 @@ You may also customize yout workflow with .cargo/config.toml.
         - [x] chip ID + read
         - [ ] write
         - [ ] DMA
+    - [ ] bluetooth
+        - [x] run BLE connection (using examples from hal)
+        - [x] run bluetooth scan/ADV reception
+        - [ ] port bluetooth to this repo (embassy/hal dependency hell got me stuck)
 - [ ] firmware
     - [ ] integrate embassy async
     - [ ] UART not working in debug builds (clock not settable in debug other than 6mhz)
     - [x] UART logging
-    - [ ] run bluetooth scan/ADV reception
-    - [ ] run BLE connection
 
 
 ## Debug build issues

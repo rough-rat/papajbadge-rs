@@ -13,7 +13,7 @@ ble = []
 
 [dependencies]
 # ch58x = { path = "ch58x", features = ["ch58x", "rt"] }
-ch58x-hal = "0.0.2"
+ch58x-hal = { version = "0.0.2", features = [] }
 
 critical-section = "1.1.2"
 qingke = { version = "0.1.7", features = ["critical-section-impl"] }
@@ -24,9 +24,21 @@ nb = "1.1.0"
 
 embedded-hal-local = { version = "1.0.0-rc.2", package = "embedded-hal" }
 
-embassy-sync = { version = "0.5.0", optional = true }
 defmt = { version = "1.0.1", optional = true }
 spi-memory = "0.2.0"
+
+embassy-executor = { version = "0.7.0", features = [
+    "nightly",
+    "arch-riscv32",
+    "executor-thread",
+] }
+
+embassy-sync = { version = "0.5.0", optional = true }
+embassy-time = { version = "0.2.0" }
+# embassy-time-driver = { version = "0.1.0", features = ["tick-hz-32_768"] }
+
+# embassy-futures = "0.1.1"
+
 
 [profile.dev]
 lto = false
