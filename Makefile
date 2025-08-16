@@ -1,6 +1,6 @@
 OPENOCD_BIN := ./openocd/openocd
 OPENOCD_CFG := ./openocd/wch-riscv.cfg
-GDB := rust-gdb
+GDB := gdb
 OPENOCD_PORT := 3333
 
 .PHONY: debug
@@ -25,7 +25,7 @@ attach:
 		-ex "target extended-remote :3333" \
 		-ex "set remotetimeout 5000" \
 		-ex "monitor reset halt" \
-		 2> /dev/null 
+		--tui
 
 .PHONY: spawn-openocd
 spawn-openocd:

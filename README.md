@@ -18,7 +18,7 @@ Do not use WCH-Link, it nearly works, but contains some bugs, and does not work.
 
 ### Flashing as the WCH intended (via USB)
 
-`wchisp flash <PATH>`
+`wchisp flash <PATH>`. You must press "boot" button and reset power to enter ISP mode
 
 ### Enabling not-SWD interface
 
@@ -50,6 +50,12 @@ In 2nd shell, call either `make debug` or `make attach` (to skip loading new bin
 
 Refer to Makefile for more information.
 
+### Flashing target put to sleep/wfi() mode
+
+Reset the board with "boot" button pressed. This does not enter the bootloader
+mode (like in esp32), but the firmware checks on start if the button is pressed
+and enters blinky busyloop (so probe can attach to it with no issue).
+
 ### More info
 
 Currently I'm using makefiles, but in the end, i'd like to keep the environment
@@ -72,8 +78,12 @@ You may also customize yout workflow with .cargo/config.toml.
     - [ ] speaker (current revision is fubar)
     - [ ] power
         - [ ] check power consumption + sleep modes
-        - [ ] check CR2032/USB power XORing
-        - [ ] check if LDO stable
+            - [x] run (6mA @ 6mhz)
+            - [x] idle (1.6mA, agrees with datasheet)
+            - [x] halt (~250uA, should be 320uA)
+            - [ ] sleep
+        - [x] check CR2032/USB power XORing (removed in rev2)
+        - [x] check if LDO stable (removed in rev2)
     - [x] clocks
         - [x] check LSE (waveform visible without activating in code, probing glitches time counting without halting MCU)
         - [x] check HSE (probing glitches UART baudrate)
@@ -84,7 +94,30 @@ You may also customize yout workflow with .cargo/config.toml.
         - [ ] DMA
 - [ ] firmware
     - [ ] integrate embassy async
-    - [ ] UART not working in debug builds
-    - [ ] UART logging
+    - [ ] UART not working in debug builds (clock not settable in debug other than 6mhz)
+    - [x] UART logging
     - [ ] run bluetooth scan/ADV reception
     - [ ] run BLE connection
+
+
+## Debug build issues
+
+TODO expand
+
+```
+debug build
+0x40001000:	0x00000000	0x00000000	0x00140005	0x00200000 // 0x40001008 - clock register
+0x40001010:	0x00000000	0x00000000	0x00000000	0x00000000 // PLL difference 0x48 vs 0x05
+0x40001020:	0x092211df	0x00000200	0x00000000	0x82c31011 // conclusion - writing there doesnt work
+0x40001030:	0x00000230	0x00000000	0x0083afab	0x00000000 // count register (irrelevant)
+0x40001040:	0xcf0c8270	0x0010dd00	0x4a000094	0x00320000 // RB_SAFE_ACC_MODE 00 vs 11
+0x40001050:	0x010000b2	0x00000000	0x0000a00f	0x00000000 // wdog (irrelevant)
+
+--release
+0x40001000:	0x00000000	0x00000000	0x00140048	0x00200000
+0x40001010:	0x00000000	0x00000000	0x00000000	0x00000000
+0x40001020:	0x092211df	0x00000200	0x00000000	0x82c31011
+0x40001030:	0x00000230	0x00000000	0x01748622	0x00000000
+0x40001040:	0xee0c8240	0x0010dd00	0xca000094	0x00320000
+0x40001050:	0x010000b2	0x00000000	0x0000a00f	0x00000000
+```
