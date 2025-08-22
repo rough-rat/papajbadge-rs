@@ -74,6 +74,7 @@ async fn main(spawner: Spawner) -> ! {
     // }
     // config.clock.enable_lse();
     let p = hal::init(config);
+    hal::embassy::init();
 
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
     // ena.set_low();
@@ -87,17 +88,14 @@ async fn main(spawner: Spawner) -> ! {
     init_logger(serial);
     log!( "\n\n\nHello World!");
 
-    // let pin =
-
-    chiptune_loop();
-
+    // chiptune_loop();
 
     if but.is_low() {
         // p = flash_test(serial, p);
 
         log!("Button pressed, loopin' time\n");
-        // spawner.spawn(async_blink(p.PA8.degrade())).unwrap();
-        // let mut rtc = get_configured_rtc(); 
+        spawner.spawn(async_blink(p.PA8.degrade())).unwrap();
+        let mut rtc = get_configured_rtc(); 
 
         // loop{
         //     but.wait_for_rising_edge().await;
@@ -106,8 +104,12 @@ async fn main(spawner: Spawner) -> ! {
         //     log!("T{:02}:{:02}:{:02} \n", 
         //         now.hour, now.minute, now.second);
         // }
-        let led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
-        blinky(led);
+        // let led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
+        // blinky(led);
+
+        loop{
+            Timer::after(Duration::from_millis(1000)).await;
+        }
     } else {
         let mut led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
         led.set_high();

@@ -12,8 +12,9 @@ defmt = ["dep:defmt"]
 ble = []
 
 [dependencies]
-# ch58x = { path = "ch58x", features = ["ch58x", "rt"] }
-ch58x-hal = { version = "0.0.2", features = [] }
+# ch58x = { path = "ch58x", features = ["ch58'x", "rt"] }
+# ch58x-hal = { version = "0.0.2", features = ["default"] } <-is not identical to git version
+ch58x-hal = { git="https://github.com/ch32-rs/ch58x-hal.git", features = ["default", "embassy"] }
 
 critical-section = "1.1.2"
 qingke = { version = "0.1.7", features = ["critical-section-impl"] }
@@ -27,15 +28,16 @@ embedded-hal-local = { version = "1.0.0-rc.2", package = "embedded-hal" }
 defmt = { version = "1.0.1", optional = true }
 spi-memory = "0.2.0"
 
-embassy-executor = { version = "0.7.0", features = [
+embassy-executor = { version = "0.5.0", features = [
     "nightly",
     "arch-riscv32",
     "executor-thread",
+    "integrated-timers"
 ] }
 
 embassy-sync = { version = "0.5.0", optional = true }
-embassy-time = { version = "0.2.0" }
-# embassy-time-driver = { version = "0.1.0", features = ["tick-hz-32_768"] }
+embassy-time = { version = "0.3.0" }
+embassy-time-driver = { version = "0.1.0", features = ["tick-hz-32_768"] }
 
 # embassy-futures = "0.1.1"
 
