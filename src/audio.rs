@@ -32,10 +32,10 @@ pub fn chiptune_loop() {
         tmr.fifo().write(|w|  w.fifo().bits(0x08) );
 
         loop {
-            delay.delay_us(1);
-
             let v = get_char_for_t(period as i32);
             tmr.fifo().write(|w|  w.fifo().bits(v as u32) );
+            delay.delay_us(10);
+            period = period.wrapping_add(1);
         }
     }
 }

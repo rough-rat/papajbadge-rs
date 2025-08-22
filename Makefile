@@ -32,9 +32,23 @@ spawn-openocd:
 	$(OPENOCD_BIN) -f $(OPENOCD_CFG)
 	pkill -f $(OPENOCD_BIN)
 
-unlock-target:
+mcu-unlock:
 	wchisp config unprotect
 	wchisp config enable-debug
 
-reset-target:
+mcu-relock:
 	wchisp config reset
+
+toggle-3v3:
+	wlink set-power disable3v3; wlink set-power enable3v3
+
+set-boot:
+	wlink set-power enable5v
+	make toggle-3v3
+
+set-run:
+	wlink set-power disable5v
+	make toggle-3v3
+
+set-off:
+	wlink set-power disable3v3;

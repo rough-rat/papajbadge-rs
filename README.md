@@ -28,9 +28,9 @@ probe - with USB flashing, to load new firmware, one must disconnect and connect
 pressed (hold reset -> hold boot -> release reset is not working either fo some 
 reason)
 
-Sadly, the chip must be unlocked using USB interface first.
+The chip may need unlocking, using USB interface first.
 
-Connect the device, and call `make unlock-target`
+Connect the device, and call `make mcu-unlock`
 
 ### flashing via not-SWD
 

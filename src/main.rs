@@ -34,8 +34,8 @@ use embassy_time::{Duration, Instant, Timer};
 mod helpers;
 use helpers::{blinky, get_configured_rtc, enter_sleep};
 
-// mod audio;
-// use audio::{get_char_for_t, chiptune_loop};
+mod audio;
+use audio::{get_char_for_t, chiptune_loop};
 
 mod logger;
 use logger::init as init_logger;
@@ -76,7 +76,10 @@ async fn main(spawner: Spawner) -> ! {
     let p = hal::init(config);
 
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
+    // ena.set_low();
     ena.set_high();
+
+    let mut pwm_out = Output::new(p.PA9, Level::Low,OutputDrive::_20mA);
 
     let mut but = Input::new(p.PB22, Pull::None);
 
@@ -86,9 +89,11 @@ async fn main(spawner: Spawner) -> ! {
 
     // let pin =
 
+    chiptune_loop();
+
+
     if but.is_low() {
         // p = flash_test(serial, p);
-        // chiptune_loop();
 
         log!("Button pressed, loopin' time\n");
         // spawner.spawn(async_blink(p.PA8.degrade())).unwrap();
