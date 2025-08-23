@@ -1,3 +1,4 @@
+#![allow(static_mut_refs)]
 
 use {ch58x_hal as hal};
 use core::{ptr, slice};
@@ -11,17 +12,13 @@ use hal::{ble};
 
 use crate::log;
 
-
-use hal::rtc::{Rtc};
-
-
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Ticker, Timer};
 use core::sync::atomic::{AtomicBool, Ordering};
-use hal::gpio::{AnyPin, Input, Level, Output, OutputDrive, Pin, Pull};
+use hal::gpio::{AnyPin, Level, Output, OutputDrive };
 
 
 const fn lo_u16(x: u16) -> u8 {
@@ -237,6 +234,8 @@ pub unsafe fn devinfo_init() {
 
 /// GAP Role init
 pub unsafe fn common_init() {
+    let _ = GAPRole::peripheral_init().unwrap();
+
     // Setup the GAP Peripheral Role Profile
     {
         // Set the GAP Role Parameters
@@ -344,11 +343,11 @@ pub unsafe fn blinky_init() {
         value: *mut u8,
         plen: *mut u16,
         offset: u16,
-        max_len: u16,
+        _max_len: u16,
         _method: u8,
     ) -> u8 {
         // Make sure it's not a blob operation (no attributes in the profile are long)
-        if (offset > 0) {
+        if offset > 0 {
             return ATT_ERR_ATTR_NOT_LONG;
         }
 
@@ -375,7 +374,7 @@ pub unsafe fn blinky_init() {
         value: *mut u8,
         len: u16,
         offset: u16,
-        method: u8,
+        _method: u8,
     ) -> u8 {
         let uuid = *((*attr).type_.uuid as *const u16);
         log!("! on_write_attr UUID: 0x{:04x}", uuid);
@@ -407,9 +406,9 @@ pub unsafe fn blinky_init() {
                 let val = slice::from_raw_parts(value, len as usize);
                 log!("! on_write_attr sub value {:?}", val);
                 if val == &[0x01, 0x00] {
-                    APP_CHANNEL.try_send(AppEvent::BlinkySubscribed(conn_handle));
+                    APP_CHANNEL.try_send(AppEvent::BlinkySubscribed(conn_handle)).ok();
                 } else {
-                    APP_CHANNEL.try_send(AppEvent::BlinkyUnsubscribed(conn_handle));
+                    APP_CHANNEL.try_send(AppEvent::BlinkyUnsubscribed(conn_handle)).ok();
                 }
             }
         } else {
@@ -573,7 +572,7 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                 AppEvent::Disconnected(conn_handle) => unsafe {
                     GATTServApp::init_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_mut_ptr());
                 },
-                AppEvent::BlinkySubscribed(conn_handle) => unsafe {
+                AppEvent::BlinkySubscribed(conn_handle) =>  {
                     spawner.spawn(blinky_notification(conn_handle)).unwrap();
                 },
                 _ => {
@@ -605,18 +604,18 @@ async fn blinky_notification(conn_handle: u16) {
                     let val: u8 = if on { 0x01 } else { 0x00 };
                     // let mut msg = gattMsg_t::alloc_handle_value_notification(conn_handle, 2);
 
-                    unsafe {
-                        NOTIFY_MSG.handleValueNoti.pValue =
-                            GATT_bm_alloc(0, ATT_HANDLE_VALUE_NOTI, 2, ptr::null_mut(), 0) as _;
-                        NOTIFY_MSG.handleValueNoti.handle = BLINKY_ATTR_TABLE[2].handle;
-                        NOTIFY_MSG.handleValueNoti.len = 2;
+                    
+                    NOTIFY_MSG.handleValueNoti.pValue =
+                        GATT_bm_alloc(0, ATT_HANDLE_VALUE_NOTI, 2, ptr::null_mut(), 0) as _;
+                    NOTIFY_MSG.handleValueNoti.handle = BLINKY_ATTR_TABLE[2].handle;
+                    NOTIFY_MSG.handleValueNoti.len = 2;
 
-                        core::ptr::copy(&val as *const _ as _, NOTIFY_MSG.handleValueNoti.pValue, 2);
-                        log!("!! handle {}", BLINKY_ATTR_TABLE[2].handle);
+                    core::ptr::copy(&val as *const _ as _, NOTIFY_MSG.handleValueNoti.pValue, 2);
+                    log!("!! handle {}", BLINKY_ATTR_TABLE[2].handle);
 
-                        let rc = GATT_Notification(conn_handle, &NOTIFY_MSG.handleValueNoti, 0);
-                        log!("!! notify rc {:?}", rc);
-                    }
+                    let rc = GATT_Notification(conn_handle, &NOTIFY_MSG.handleValueNoti, 0);
+                    log!("!! notify rc {:?}", rc);
+                    
                 }
             },
             Either::Second(AppEvent::Disconnected(_)) | Either::Second(AppEvent::BlinkyUnsubscribed(_)) => {

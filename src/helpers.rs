@@ -1,87 +1,14 @@
 use {ch58x_hal as hal};
-use core::fmt::Write;
-use ch58x_hal::{peripherals, with_safe_access};
+use ch58x_hal::{with_safe_access};
 use hal::gpio::{Output};
 use embedded_hal_local::delay::DelayNs;
 use qingke::riscv::asm::{nop, wfi};
 
 use core::ptr::{read_volatile};
-use hal::uart::UartTx;
 use hal::delay::CycleDelay;
-use hal::rtc::{DateTime, Rtc};
-use core::sync::atomic::{AtomicBool, Ordering};
-use ch58x_hal::pac::{self, PFIC, SYS}; // for SYSTICK
+use ch58x_hal::pac::{ PFIC, SYS}; // for SYSTICK
 
 use crate::log;
-
-
-// #[macro_export]
-// macro_rules! log {
-//     ($($arg:tt)*) => {
-//         unsafe {
-//             use core::fmt::Write;
-//             use core::writeln;
-
-//             if let Some(uart) = SERIAL.as_mut() {
-//                 writeln!(uart, $($arg)*).unwrap();
-//             }
-//         }
-//     }
-// }
-
-/* CAUTION: VIBECODED CRAP, TODO: rewrite */
-
-#[allow(dead_code)]
-static mut SERIAL: Option<UartTx<peripherals::UART0>> = None;
-
-#[allow(dead_code)]
-static SYSTICK_INIT: AtomicBool = AtomicBool::new(false);
-
-#[allow(dead_code)]
-fn init_systick() {
-    if SYSTICK_INIT.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-        // Enable SysTick counter in upcount mode sourced from HCLK.
-        let st = unsafe { &*pac::SYSTICK::PTR }; // 0xE000_F000
-        st.ctlr().modify(|_, w| {
-            w.stclk().hclk()   // HCLK source
-             .mode().upcount() // upcount
-             .ste().set_bit()  // enable counter
-        });
-    }
-}
-
-#[allow(dead_code)]
-#[inline]
-pub fn delay_systick_cycles(cycles: u64) {
-    init_systick();
-    let st = unsafe { &*pac::SYSTICK::PTR };
-    let start = st.cnt().read().bits();
-    while st.cnt().read().bits().wrapping_sub(start) < cycles {
-        core::hint::spin_loop();
-    }
-}
-
-#[allow(dead_code)]
-#[inline]
-pub fn delay_systick_us(us: u32) {
-    let hclk = hal::sysctl::clocks().hclk.to_Hz() as u64;
-    let cycles = (hclk * us as u64 + 999_999) / 1_000_000; // round up
-    delay_systick_cycles(cycles);
-}
-
-#[allow(dead_code)]
-#[inline]
-pub fn delay_systick_ms(ms: u32) {
-    // Prevent overflow for very large ms.
-    let mut remaining = ms;
-    while remaining > 0 {
-        let chunk = remaining.min(1000); // process in <=1s chunks
-        delay_systick_us(chunk * 1000);
-        remaining -= chunk;
-    }
-}
-
-/* CAUTION END */
 
 
 pub unsafe fn peek_register(ptr: u32){
@@ -89,7 +16,7 @@ pub unsafe fn peek_register(ptr: u32){
     log!("0x{:08X}: 0x{:02X}", ptr, dupa);
 }
 
-pub fn blinky(mut led: Output<'_, ch58x_hal::peripherals::PA8>){
+pub fn blinky(mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> !{
     let mut delay = CycleDelay;
     loop{
         led.toggle();
@@ -98,40 +25,24 @@ pub fn blinky(mut led: Output<'_, ch58x_hal::peripherals::PA8>){
 }
 
 
-pub fn get_configured_rtc() -> Rtc {
-    let mut rtc = Rtc {};
-    let now = rtc.now();
+pub fn enable_sleep(){
+    let sys = unsafe { &*SYS::PTR };
+     unsafe{
+        with_safe_access(||{
+            // wakeup from RTC ISR, memory stays active (?)
+            sys.slp_wake_ctrl().modify(|_, w| {
+                w.slp_rtc_wake().bit(true).wake_ev_mode().bit(false)
+            });
+        });
+        with_safe_access(||{
+            // XXX cycles of delay
+            sys.slp_power_ctrl().modify(|_, w| {
+                w.wake_dly_mod().bits(0b00)
+            });
+        });
 
-    if now.year < 2025 {
-        log!("RTC not set, setting to a meaningless random date");
-        rtc.set_datatime(
-            DateTime { year: 2025, month: 4, day: 2,
-                hour: 21,minute: 36, second: 0,
-                millisecond: 0,
-            }
-        );
-    } else {
-        log!("RTC already set to: {:02}:{:02}:{:02} {:02}/{:02}/{}", 
-            now.hour, now.minute, now.second, now.month, now.day, now.year);
     }
-    rtc
 }
-
-
-#[panic_handler]
-pub fn panic(info: &core::panic::PanicInfo) -> ! {
-    use core::fmt::Write;
-
-    let pin = unsafe { hal::peripherals::PB7::steal() };
-    let uart = unsafe { hal::peripherals::UART0::steal() };
-
-    let mut serial = UartTx::new(uart, pin, Default::default()).unwrap();
-
-    let _ = writeln!(&mut serial, "\n\n\n{}", info);
-
-    loop {}
-}
-
 
 pub fn enter_sleep(){
     let sys = unsafe { &*SYS::PTR };
@@ -211,7 +122,4 @@ pub fn enter_sleep(){
 //     write_volatile(reg_ptr, 0x57);
 //     nop();
 //     write_volatile(reg_ptr, 0xA8);
-//     nop(); nop();
-
-//     sys.safe_access_sig().read().safe_acc_act().bit_is_set()
 // }

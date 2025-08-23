@@ -75,13 +75,16 @@ You may also customize yout workflow with .cargo/config.toml.
     - [x] check if bluetooth works at all
     - [x] run PoC PWM output
     - [ ] PWM + DMA for audio output (TIM0 DOES NOT WORK WITH DMA)
-    - [ ] speaker (current revision is fubar)
+    - [x] speaker (works but requires manual rework, full power bootloops the device)
     - [ ] power
         - [ ] check power consumption + sleep modes
             - [x] run (6mA @ 6mhz)
             - [x] idle (1.6mA, agrees with datasheet)
             - [x] halt (150-250uA, should be 320uA)
             - [ ] sleep
+            - [ ] BT listen
+            - [ ] BT ADV
+            - [ ] BT connection
         - [x] check CR2032/USB power XORing (removed in rev2)
         - [x] check if LDO stable (removed in rev2)
     - [x] clocks
@@ -92,19 +95,24 @@ You may also customize yout workflow with .cargo/config.toml.
         - [x] chip ID + read
         - [ ] write
         - [ ] DMA
-    - [ ] bluetooth
+    - [ ] SD card
+    - [x] bluetooth
         - [x] run BLE connection (using examples from hal)
-        - [x] run bluetooth scan/ADV reception
-        - [ ] port bluetooth to this repo (embassy/hal dependency hell got me stuck)
+        - [x] run bluetooth scan/ADV reception 
 - [ ] firmware
     - [ ] integrate embassy async
     - [ ] UART not working in debug builds (clock not settable in debug other than 6mhz)
     - [x] UART logging
+    - [ ] bluetooth features
+        - [x] peripheral PoC
+        - [ ] set RTC from BLE
+        - [ ] badge-to-badge comm
+        - [ ] listen to meme adv packets
 
 
 ## Debug build issues
 
-TODO expand
+TODO expand. Differences between build and release
 
 ```
 debug build

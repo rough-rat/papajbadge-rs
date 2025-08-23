@@ -7,31 +7,22 @@
 
 use {ch58x_hal as hal};
 use hal::delay::CycleDelay;
-use hal::gpio::{AnyPin, Input, Level, Output, OutputDrive, Pin, Pull};
-use hal::{delay, isp, peripherals};
+use hal::gpio::{ Input, Level, Output, OutputDrive, Pull};
 
-use hal::with_safe_access;
-use ch58x_hal::pac::{PFIC, SYS};
 use ch58x_hal::pac::Interrupt;
-use qingke::riscv::asm::{wfi, nop};
-// use core::ptr::{read_volatile, write_volatile};
+use papajbadge_rs::helpers::enable_sleep;
 
 use embedded_hal_local::delay::DelayNs;
 use hal::rtc::{Rtc};
 
-use papajbadge_rs::helpers;
+use papajbadge_rs::{get_configured_rtc, helpers};
 use papajbadge_rs::log;
-use helpers::{blinky, get_configured_rtc, enter_sleep};
+use helpers::{blinky, enter_sleep};
 
 use papajbadge_rs::logger::init as init_logger;
 
 use hal::uart::UartTx;
-static mut SERIAL: Option<UartTx<peripherals::UART0>> = None;
 
-#[no_mangle]
-pub extern "C" fn RTC() {
-    unsafe { Rtc.ack_timing(); }
-}
 #[qingke_rt::entry]
 fn main() -> ! {
     let mut config = hal::Config::default(); 
@@ -41,21 +32,23 @@ fn main() -> ! {
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
     ena.set_low();
 
-    let mut but = Input::new(p.PB22, Pull::None);
+    let but = Input::new(p.PB22, Pull::None);
 
-    let mut serial = UartTx::new(p.UART0, p.PB7, Default::default()).unwrap();
+    let serial = UartTx::new(p.UART0, p.PB7, Default::default()).unwrap();
     init_logger(serial);
     log!( "\n\n\nHello World!");
+
+    let mut rtc = get_configured_rtc();
+
     if but.is_low() {
+        // without that, the board is impossible to reprogram without power cycling
         log!("Button pressed, loopin' time\n");
-        let mut rtc = get_configured_rtc(); 
         let led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
         blinky(led);
     } else {
         let mut led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
         led.set_high();
 
-        let mut rtc = get_configured_rtc(); 
         rtc.enable_timing(hal::rtc::TimingMode::_0_5S);
         rtc.ack_timing();
 
@@ -66,12 +59,10 @@ fn main() -> ! {
 
         rtc_loop(rtc, led);
     }
-   
-    loop{unsafe{nop()}}; //not reachable but rust knows better
 }
 
 
-fn rtc_loop(mut rtc: Rtc, mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> ! {
+fn rtc_loop(rtc: Rtc, mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> ! {
     let mut counter: u32 = 0;
     let mut delay = CycleDelay;
 
@@ -85,26 +76,5 @@ fn rtc_loop(mut rtc: Rtc, mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> !
             now.hour, now.minute, now.second, counter);
         counter += 1;
         delay.delay_us(500);
-    }
-}
-
-fn enable_sleep(){
-
-    let sys = unsafe { &*SYS::PTR };
-    let pfic = unsafe { &*PFIC::PTR };
-     unsafe{
-        with_safe_access(||{
-            // wakeup from RTC ISR, memory stays active (?)
-            sys.slp_wake_ctrl().modify(|_, w| {
-                w.slp_rtc_wake().bit(true).wake_ev_mode().bit(false)
-            });
-        });
-        with_safe_access(||{
-            // XXX cycles of delay
-            sys.slp_power_ctrl().modify(|_, w| {
-                w.wake_dly_mod().bits(0b00)
-            });
-        });
-
     }
 }
