@@ -20,6 +20,20 @@ use embassy_time::{Duration, Ticker, Timer};
 use core::sync::atomic::{AtomicBool, Ordering};
 use hal::gpio::{AnyPin, Level, Output, OutputDrive };
 
+pub mod blinky_service;
+pub mod current_time_service;
+
+use blinky_service::{BLINKY_SERV_UUID, BLINKY_CLIENT_CHARCFG, blinky_notification};
+
+const GAP_PAPAJ: u16 = 0x049F;
+
+//TODO Current Time (0x2A2B)
+// https://www.bluetooth.com/specifications/specs/object-push-profile-1-2/   ?
+// Battery Level (0x2A19)
+// Firmware Revision (0x2A26) 
+// writable owner name
+// Mute (0x2BC3)
+// Object Push Profile (vcards)
 
 const fn lo_u16(x: u16) -> u8 {
     (x & 0xff) as u8
@@ -75,26 +89,33 @@ static mut ADVERT_DATA: &[u8] = &[
     // https://www.bluetooth.com/specifications/assigned-numbers/
     0x04,                             // length of this data including the data type byte
     GAP_ADTYPE_MANUFACTURER_SPECIFIC, // manufacturer specific advertisement data type
-    lo_u16(0x07D7),                   // 0x07D7, Nanjing Qinheng Microelectronics Co., Ltd.
-    hi_u16(0x07D7),
+    lo_u16(GAP_PAPAJ),                // 0x07D7, Nanjing Qinheng Microelectronics Co., Ltd.
+    hi_u16(GAP_PAPAJ),
     0x01, // remains manufacturer specific data
 
     // advertised service
-    0x03,                  // length of this data
-    GAP_ADTYPE_16BIT_MORE, // some of the UUID's, but not all
-    lo_u16(BLINKY_SERV_UUID),
-    hi_u16(BLINKY_SERV_UUID),
+    // 0x03,                  // length of this data
+    // GAP_ADTYPE_16BIT_MORE, // some of the UUID's, but not all
+    // lo_u16(BLINKY_SERV_UUID),
+    // hi_u16(BLINKY_SERV_UUID),
+
+    // advertise Current Time Service 0x1805
+    0x03,
+    GAP_ADTYPE_16BIT_MORE,
+    lo_u16(gatt_uuid::CURRENT_TIME_UUID),
+    hi_u16(gatt_uuid::CURRENT_TIME_UUID),
 ];
 
 // GAP GATT Attributes
 // len = 21 GAP_DEVICE_NAME_LEN
 // max_len = 248
-static ATT_DEVICE_NAME: &[u8] = b"ch58x-hal peripheral";
+static ATT_DEVICE_NAME: &[u8] = b"papajbadge gatt stuff";
+    // let uid = hal::isp::get_unique_id();
 
 // System ID characteristic
 const DEVINFO_SYSTEM_ID_LEN: usize = 8;
 
-static mut SYSTEM_ID: [u8; 8] = [0u8; 8];
+pub static mut SYSTEM_ID: [u8; 8] = [0u8; 8];
 // The list must start with a Service attribute followed by
 // all attributes associated with this Service attribute.
 // Must use static mut fixed sized array, as it will be changed by Service to assign handles.
@@ -199,8 +220,12 @@ pub unsafe fn devinfo_init() {
                     ptr::copy(SYSTEM_ID.as_ptr(), value, DEVINFO_SYSTEM_ID_LEN);
                 }
                 gatt_uuid::SERIAL_NUMBER_UUID => {
+                    // let out = hal::isp::get_unique_id();
+                    // let out = [0xDE, 0xAD, 0xBE, 0xEF, 0x95, 0x27, 0x00, 0x00];
+                    // TODO id to string
                     let out = b"No. 9527";
                     *plen = out.len() as _;
+                    *plen = 8;
                     core::ptr::copy(out.as_ptr(), value, out.len());
                 }
                 gatt_uuid::TEMP_UUID => {
@@ -282,158 +307,57 @@ pub unsafe fn common_init() {
     // Add other service
 }
 
-const BLINKY_SERV_UUID: u16 = 0xFFE0;
-const BLINKY_DATA_UUID: u16 = 0xFFE1;
-const BLINKY_CONF_UUID: u16 = 0xFFE2;
-const BLINKY_CMD_UUID: u16 = 0xFFE3;
+async unsafe fn handle_tmos_event(event: &TmosEvent) {
+    match event.message_id() {
+        TmosEvent::GAP_MSG_EVENT => {
+            // Peripheral_ProcessGAPMsg
+            let msg = event.0 as *const gapRoleEvent_t;
 
-static mut BLINKY_CLIENT_CHARCFG: [gattCharCfg_t; 4] = unsafe { core::mem::zeroed() };
-
-static mut BLINKY_ATTR_TABLE: [GattAttribute; 6] =
-    [
-        // Blinky Service
-        GattAttribute {
-            type_: GattAttrType::PRIMARY_SERVICE,
-            permissions: GATT_PERMIT_READ,
-            handle: 0,
-            value: &GattAttrType {
-                len: ATT_BT_UUID_SIZE,
-                uuid: &BLINKY_SERV_UUID as *const _ as _,
-            } as *const _ as _,
-        },
-        // Blinky Data Declaration and Value
-        GattAttribute {
-            type_: GattAttrType::CHARACTERISTIC,
-            permissions: GATT_PERMIT_READ,
-            handle: 0,
-            value: &(GATT_PROP_NOTIFY | GATT_PROP_READ) as *const _ as _,
-        },
-        GattAttribute {
-            type_: GattAttrType::new_u16(&BLINKY_DATA_UUID),
-            permissions: GATT_PERMIT_READ,
-            handle: 0,
-            value: ptr::null(), // this will be filled in read callback
-        },
-        // Blinky client config
-        GattAttribute {
-            type_: GattAttrType::CLIENT_CHAR_CFG,
-            permissions: GATT_PERMIT_READ | GATT_PERMIT_WRITE,
-            handle: 0,
-            value: unsafe { BLINKY_CLIENT_CHARCFG.as_ptr() as _ },
-        },
-        // Command
-        GattAttribute {
-            type_: GattAttrType::CHARACTERISTIC,
-            permissions: GATT_PERMIT_READ,
-            handle: 0,
-            value: &GATT_PROP_WRITE as *const _ as _,
-        },
-        GattAttribute {
-            type_: GattAttrType::new_u16(&BLINKY_CMD_UUID),
-            permissions: GATT_PERMIT_WRITE,
-            handle: 0,
-            value: ptr::null(),
-        },
-    ];
-
-pub unsafe fn blinky_init() {
-    unsafe extern "C" fn blinky_on_read_attr(
-        _conn_handle: u16,
-        attr: *mut GattAttribute,
-        value: *mut u8,
-        plen: *mut u16,
-        offset: u16,
-        _max_len: u16,
-        _method: u8,
-    ) -> u8 {
-        // Make sure it's not a blob operation (no attributes in the profile are long)
-        if offset > 0 {
-            return ATT_ERR_ATTR_NOT_LONG;
-        }
-
-        let uuid = *((*attr).type_.uuid as *const u16);
-        log!("! on_read_attr UUID: 0x{:04x}", uuid);
-
-        match uuid {
-            BLINKY_DATA_UUID => {
-                let on = BLINKY_ON.load(Ordering::Relaxed);
-                let val: u8 = if on { 0x01 } else { 0x00 };
-                *plen = size_of_val(&val) as _;
-                core::ptr::copy(&val as *const _ as _, value, *plen as _);
-            }
-            _ => {
-                return ATT_ERR_ATTR_NOT_FOUND;
-            }
-        }
-
-        return 0;
-    }
-    unsafe extern "C" fn blinky_on_write_attr(
-        conn_handle: u16,
-        attr: *mut GattAttribute,
-        value: *mut u8,
-        len: u16,
-        offset: u16,
-        _method: u8,
-    ) -> u8 {
-        let uuid = *((*attr).type_.uuid as *const u16);
-        log!("! on_write_attr UUID: 0x{:04x}", uuid);
-
-        if uuid == BLINKY_CMD_UUID {
-            let cmd = *value;
-            log!("! on_write_attr cmd: 0x{:02x}", cmd);
-            if cmd == 0x01 {
-                BLINKY_ON.store(true, Ordering::Relaxed);
-            } else if cmd == 0x00 {
-                BLINKY_ON.store(false, Ordering::Relaxed);
-            }
-        } else if uuid == BLINKY_CONF_UUID {
-            // sub to notrification
-            //  let status = GATTServApp::process_ccc_write_req(conn_handle, attr, value, len, offset, GATT_CLIENT_CFG_NOTIFY);
-            // if status.is_ok() {
-            //    log!("! on_write_attr sub");
-            //    let val = slice::from_raw_parts(value, len as usize);
-            //    log!("! on_write_attr sub value {:?}", val);
-            // }
-            //APP_CHANNEL.try_send(AppEvent::BlinkySubscribed(conn_handle));
-            //log!("! on_write_attr sub");
-        } else if uuid == gatt_uuid::GATT_CLIENT_CHAR_CFG_UUID {
-            // client char cfg
-            let status =
-                GATTServApp::process_ccc_write_req(conn_handle, attr, value, len, offset, GATT_CLIENT_CFG_NOTIFY);
-            if status.is_ok() {
-                log!("! on_write_attr sub");
-                let val = slice::from_raw_parts(value, len as usize);
-                log!("! on_write_attr sub value {:?}", val);
-                if val == &[0x01, 0x00] {
-                    APP_CHANNEL.try_send(AppEvent::BlinkySubscribed(conn_handle)).ok();
-                } else {
-                    APP_CHANNEL.try_send(AppEvent::BlinkyUnsubscribed(conn_handle)).ok();
+            let opcode = unsafe { (*msg).gap.opcode };
+            match opcode {
+                GAP_SCAN_REQUEST_EVENT => {
+                    log!(
+                        "GAP scan request from {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ...",
+                        (*msg).scanReqEvt.scannerAddr[0],
+                        (*msg).scanReqEvt.scannerAddr[1],
+                        (*msg).scanReqEvt.scannerAddr[2],
+                        (*msg).scanReqEvt.scannerAddr[3],
+                        (*msg).scanReqEvt.scannerAddr[4],
+                        (*msg).scanReqEvt.scannerAddr[5],
+                    );
+                }
+                GAP_PHY_UPDATE_EVENT => {
+                    log!(
+                        "GAP phy update Rx:{:x} Tx:{:x}",
+                        (*msg).linkPhyUpdate.connRxPHYS,
+                        (*msg).linkPhyUpdate.connTxPHYS,
+                    );
+                }
+                GAP_LINK_PARAM_UPDATE_EVENT => {
+                    log!(
+                        "GAP link param update status: {:x} interval: {:x} latency: {:x} timeout: {:x}",
+                        (*msg).linkUpdate.status,
+                        (*msg).linkUpdate.connInterval,
+                        (*msg).linkUpdate.connLatency,
+                        (*msg).linkUpdate.connTimeout,
+                    );
+                }
+                _ => {
+                    log!("GAP MSG EVENT: {:p} {:x}", msg, opcode);
                 }
             }
-        } else {
-            return ATT_ERR_ATTR_NOT_FOUND;
         }
-
-        return 0;
+        TmosEvent::GATT_MSG_EVENT => {
+            let msg = event.0 as *const gattMsgEvent_t;
+            let method = unsafe { (*msg).method };
+            log!("GATT_MSG_EVENT: {:p} {:x}", msg, method);
+        }
+        _ => {
+            log!("peripheral got event: {:?} id=0x{:02x}", event, event.message_id());
+        }
     }
-
-    static BLINKY_SERVICE_CB: gattServiceCBs_t = gattServiceCBs_t {
-        pfnReadAttrCB: Some(blinky_on_read_attr),
-        pfnWriteAttrCB: Some(blinky_on_write_attr),
-        pfnAuthorizeAttrCB: None,
-    };
-
-    // Initialize Client Characteristic Configuration attributes
-    GATTServApp::init_char_cfg(INVALID_CONNHANDLE, BLINKY_CLIENT_CHARCFG.as_mut_ptr());
-
-    GATTServApp::register_service(
-        &mut BLINKY_ATTR_TABLE[..],
-        GATT_MAX_ENCRYPT_KEY_SIZE,
-        &BLINKY_SERVICE_CB,
-    )
-    .unwrap();
 }
+
 
 // App logic
 
@@ -580,116 +504,5 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                 }
             },
         }
-    }
-}
-
-#[embassy_executor::task]
-async fn blinky_notification(conn_handle: u16) {
-    let mut ticker = Ticker::every(Duration::from_millis(1000));
-
-    static mut NOTIFY_MSG: gattMsg_t = gattMsg_t {
-        handleValueNoti: attHandleValueNoti_t {
-            handle: 0,
-            len: 2,
-            pValue: ptr::null_mut(),
-        },
-    };
-    loop {
-        match select(ticker.next(), APP_CHANNEL.receive()).await {
-            Either::First(_) => unsafe {
-                let val = GATTServApp::read_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_ptr());
-                if val == 0x01 {
-                    // notification is no
-                    let on = BLINKY_ON.load(Ordering::Relaxed);
-                    let val: u8 = if on { 0x01 } else { 0x00 };
-                    // let mut msg = gattMsg_t::alloc_handle_value_notification(conn_handle, 2);
-
-                    
-                    NOTIFY_MSG.handleValueNoti.pValue =
-                        GATT_bm_alloc(0, ATT_HANDLE_VALUE_NOTI, 2, ptr::null_mut(), 0) as _;
-                    NOTIFY_MSG.handleValueNoti.handle = BLINKY_ATTR_TABLE[2].handle;
-                    NOTIFY_MSG.handleValueNoti.len = 2;
-
-                    core::ptr::copy(&val as *const _ as _, NOTIFY_MSG.handleValueNoti.pValue, 2);
-                    log!("!! handle {}", BLINKY_ATTR_TABLE[2].handle);
-
-                    let rc = GATT_Notification(conn_handle, &NOTIFY_MSG.handleValueNoti, 0);
-                    log!("!! notify rc {:?}", rc);
-                    
-                }
-            },
-            Either::Second(AppEvent::Disconnected(_)) | Either::Second(AppEvent::BlinkyUnsubscribed(_)) => {
-                log!("disconnect, stop notification");
-                return;
-            }
-            _ => (),
-        }
-    }
-}
-
-async unsafe fn handle_tmos_event(event: &TmosEvent) {
-    match event.message_id() {
-        TmosEvent::GAP_MSG_EVENT => {
-            // Peripheral_ProcessGAPMsg
-            let msg = event.0 as *const gapRoleEvent_t;
-
-            let opcode = unsafe { (*msg).gap.opcode };
-            match opcode {
-                GAP_SCAN_REQUEST_EVENT => {
-                    log!(
-                        "GAP scan request from {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} ...",
-                        (*msg).scanReqEvt.scannerAddr[0],
-                        (*msg).scanReqEvt.scannerAddr[1],
-                        (*msg).scanReqEvt.scannerAddr[2],
-                        (*msg).scanReqEvt.scannerAddr[3],
-                        (*msg).scanReqEvt.scannerAddr[4],
-                        (*msg).scanReqEvt.scannerAddr[5],
-                    );
-                }
-                GAP_PHY_UPDATE_EVENT => {
-                    log!(
-                        "GAP phy update Rx:{:x} Tx:{:x}",
-                        (*msg).linkPhyUpdate.connRxPHYS,
-                        (*msg).linkPhyUpdate.connTxPHYS,
-                    );
-                }
-                GAP_LINK_PARAM_UPDATE_EVENT => {
-                    log!(
-                        "GAP link param update status: {:x} interval: {:x} latency: {:x} timeout: {:x}",
-                        (*msg).linkUpdate.status,
-                        (*msg).linkUpdate.connInterval,
-                        (*msg).linkUpdate.connLatency,
-                        (*msg).linkUpdate.connTimeout,
-                    );
-                }
-                _ => {
-                    log!("GAP MSG EVENT: {:p} {:x}", msg, opcode);
-                }
-            }
-        }
-        TmosEvent::GATT_MSG_EVENT => {
-            let msg = event.0 as *const gattMsgEvent_t;
-            let method = unsafe { (*msg).method };
-            log!("GATT_MSG_EVENT: {:p} {:x}", msg, method);
-        }
-        _ => {
-            log!("peripheral got event: {:?} id=0x{:02x}", event, event.message_id());
-        }
-    }
-}
-
-
-
-static BLINKY_ON: AtomicBool = AtomicBool::new(true);
-
-#[embassy_executor::task]
-pub async fn blink(pin: AnyPin) {
-    let mut led = Output::new(pin, Level::Low, OutputDrive::_5mA);
-
-    loop {
-        if BLINKY_ON.load(Ordering::Relaxed) {
-            led.toggle();
-        }
-        Timer::after(Duration::from_millis(150)).await;
     }
 }

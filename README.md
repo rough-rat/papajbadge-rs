@@ -105,7 +105,7 @@ You may also customize yout workflow with .cargo/config.toml.
     - [x] UART logging
     - [ ] bluetooth features
         - [x] peripheral PoC
-        - [ ] set RTC from BLE
+        - [x] set RTC from BLE (almost working, but RTC cannot be set from callback context(?))
         - [ ] badge-to-badge comm
         - [ ] listen to meme adv packets
 
@@ -131,3 +131,5 @@ debug build
 0x40001040:	0xee0c8240	0x0010dd00	0xca000094	0x00320000
 0x40001050:	0x010000b2	0x00000000	0x0000a00f	0x00000000
 ```
+
+https://codeberg.org/20-100/Awesome_RISC-V/src/branch/master/WCH/WCH_TMOS_HowTo.pdf

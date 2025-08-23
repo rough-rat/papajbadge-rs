@@ -13,6 +13,9 @@ use papajbadge_rs::ble_periph::*;
 use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log, tmos_mainloop};
 
+use papajbadge_rs::ble_periph::{common_init, devinfo_init, peripheral};
+use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
+use papajbadge_rs::ble_periph::current_time_service::current_time_init;
 
 #[embassy_executor::task]
 async fn async_blink(pin: AnyPin) {
@@ -40,7 +43,7 @@ async fn main(spawner: Spawner) -> ! {
     init_logger(serial);
     log!("\n\n\nHello World!");
 
-    spawner.spawn(blink(p.PA8.degrade())).unwrap();
+    spawner.spawn(blinky_service_loop(p.PA8.degrade())).unwrap();
 
     let rtc = get_configured_rtc();
 
@@ -59,7 +62,8 @@ async fn main(spawner: Spawner) -> ! {
     unsafe {
         common_init();
         devinfo_init();
-        blinky_init();
+        // blinky_init();
+        current_time_init();
     }
 
     // Main_Circulation

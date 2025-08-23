@@ -15,6 +15,8 @@ use qingke_rt::highcode;
 pub mod helpers;
 pub mod audio;
 pub mod logger;
+
+// use crate::ble_periph;
 pub mod ble_periph;
 
 #[allow(unused)]
