@@ -18,7 +18,7 @@ use embassy_futures::select::{select, Either};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Ticker, Timer};
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 use hal::gpio::{AnyPin, Level, Output, OutputDrive };
 
 use super::{SYSTEM_ID, APP_CHANNEL, AppEvent};
@@ -78,17 +78,20 @@ static mut BLINKY_ATTR_TABLE: [GattAttribute; 6] =
     ];
 
 
-static BLINKY_ON: AtomicBool = AtomicBool::new(true);
+static BLINKY_ON: AtomicU32 = AtomicU32::new(1000);
 
 #[embassy_executor::task]
 pub async fn blinky_service_loop(pin: AnyPin) {
     let mut led = Output::new(pin, Level::Low, OutputDrive::_5mA);
 
     loop {
-        if BLINKY_ON.load(Ordering::Relaxed) {
-            led.toggle();
-        }
-        Timer::after(Duration::from_millis(150)).await;
+        let param = BLINKY_ON.load(Ordering::Relaxed);
+        if param != 0 {
+            led.set_high();
+            Timer::after(Duration::from_millis((param/8).into())).await;
+            led.set_low();
+            Timer::after(Duration::from_millis((param - param/8).into())).await
+        }        
     }
 }
 
@@ -113,10 +116,10 @@ pub unsafe fn blinky_init() {
 
         match uuid {
             BLINKY_DATA_UUID => {
-                let on = BLINKY_ON.load(Ordering::Relaxed);
-                let val: u8 = if on { 0x01 } else { 0x00 };
-                *plen = size_of_val(&val) as _;
-                core::ptr::copy(&val as *const _ as _, value, *plen as _);
+                let period = BLINKY_ON.load(Ordering::Relaxed);
+                // let val: u8 = if on { 0x01 } else { 0x00 };
+                *plen = size_of_val(&period) as _;
+                core::ptr::copy(&period as *const _ as _, value, *plen as _);
             }
             _ => {
                 return ATT_ERR_ATTR_NOT_FOUND;
@@ -137,13 +140,25 @@ pub unsafe fn blinky_init() {
         log!("! on_write_attr UUID: 0x{:04x}", uuid);
 
         if uuid == BLINKY_CMD_UUID {
-            let cmd = *value;
-            log!("! on_write_attr cmd: 0x{:02x}", cmd);
-            if cmd == 0x01 {
-                BLINKY_ON.store(true, Ordering::Relaxed);
-            } else if cmd == 0x00 {
-                BLINKY_ON.store(false, Ordering::Relaxed);
+            let val = slice::from_raw_parts(value, len as usize);
+
+            //convert val to u32
+            if val.len() != 4 {
+                return ATT_ERR_INVALID_VALUE_SIZE; // ATT_ERR_INVALID_VALUE_SIZE
             }
+            let new_period = u32::from_le_bytes([val[0], val[1], val[2], val[3]]);
+            log!("! on_write_attr cmd: 0x{:08x} len:{}", new_period ,len);
+
+            if new_period < 10 || new_period > 5000 {
+                return ATT_ERR_INVALID_VALUE
+            }
+
+            BLINKY_ON.store(new_period, Ordering::Relaxed);
+            // if cmd == 0x01 {
+            //     BLINKY_ON.store(true, Ordering::Relaxed);
+            // } else if cmd == 0x00 {
+            //     BLINKY_ON.store(false, Ordering::Relaxed);
+            // }
         } else if uuid == BLINKY_CONF_UUID {
             // sub to notrification
             //  let status = GATTServApp::process_ccc_write_req(conn_handle, attr, value, len, offset, GATT_CLIENT_CFG_NOTIFY);
@@ -209,17 +224,16 @@ pub async fn blinky_notification(conn_handle: u16) {
                 let val = GATTServApp::read_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_ptr());
                 if val == 0x01 {
                     // notification is no
-                    let on = BLINKY_ON.load(Ordering::Relaxed);
-                    let val: u8 = if on { 0x01 } else { 0x00 };
+                    let period = BLINKY_ON.load(Ordering::Relaxed);
+                    // let val: u8 = if on { 0x01 } else { 0x00 };
                     // let mut msg = gattMsg_t::alloc_handle_value_notification(conn_handle, 2);
-
                     
                     NOTIFY_MSG.handleValueNoti.pValue =
                         GATT_bm_alloc(0, ATT_HANDLE_VALUE_NOTI, 2, ptr::null_mut(), 0) as _;
                     NOTIFY_MSG.handleValueNoti.handle = BLINKY_ATTR_TABLE[2].handle;
                     NOTIFY_MSG.handleValueNoti.len = 2;
 
-                    core::ptr::copy(&val as *const _ as _, NOTIFY_MSG.handleValueNoti.pValue, 2);
+                    core::ptr::copy(&period as *const _ as _, NOTIFY_MSG.handleValueNoti.pValue, 2);
                     log!("!! handle {}", BLINKY_ATTR_TABLE[2].handle);
 
                     let rc = GATT_Notification(conn_handle, &NOTIFY_MSG.handleValueNoti, 0);

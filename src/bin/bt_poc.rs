@@ -17,18 +17,6 @@ use papajbadge_rs::ble_periph::{common_init, devinfo_init, peripheral};
 use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
 use papajbadge_rs::ble_periph::current_time_service::current_time_init;
 
-#[embassy_executor::task]
-async fn async_blink(pin: AnyPin) {
-    let mut led = Output::new(pin, Level::Low, OutputDrive::_5mA);
-
-    loop {
-        led.set_high();
-        Timer::after(Duration::from_millis(150)).await;
-        led.set_low();
-        Timer::after(Duration::from_millis(150)).await;
-    }
-}
-
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
@@ -62,7 +50,7 @@ async fn main(spawner: Spawner) -> ! {
     unsafe {
         common_init();
         devinfo_init();
-        // blinky_init();
+        blinky_init();
         current_time_init();
     }
 

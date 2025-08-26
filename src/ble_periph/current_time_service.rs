@@ -224,7 +224,7 @@ pub unsafe fn current_time_init() {
                     rtc_set_time(ct);
                     0
                 } else {
-                    0x0D // ATT_ERR_INVALID_VALUE_SIZE
+                    ATT_ERR_INVALID_VALUE_SIZE
                 }
             },
             // CCCD writes to enable/disable notifications
