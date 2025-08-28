@@ -76,7 +76,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
     let _ = writeln!(&mut serial, "\n\n\n{}", info);
 
-    for _ in 0..3000 {
+    for _ in 0..100 {
         led.toggle();
         for _ in 0..65535{
             unsafe{nop()};
@@ -84,7 +84,10 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     }
 
     enable_sleep();
-
+    // use qingke::register::gintenr;
+    // unsafe {
+    //     gintenr::write(gintenr::read() & (!0x08));
+    // }
     loop{
         enter_sleep();
         led.toggle();
