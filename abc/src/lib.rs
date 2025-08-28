@@ -1,11 +1,8 @@
-// #![no_std]
-
-use thiserror_no_std::Error;
+#![no_std]
 
 #[cfg(test)]
 #[macro_use]
 extern crate std;
-
 
 #[derive(Debug)]
 pub struct Event {
@@ -129,20 +126,20 @@ impl AbcIter {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    const EXAMPLE: str = 
-"X:1
-T:Speed the Plough
-M:4/4
-C:Trad.
-K:G
-|:GABc dedB|dedB dedB|c2ec B2dB|c2A2 A2BA|
-  GABc dedB|dedB dedB|c2ec B2dB|A2F2 G4:|
-|:g2gf gdBd|g2f2 e2d2|c2ec B2dB|c2A2 A2df|
-  g2gf g2Bd|g2f2 e2d2|c2ec B2dB|A2F2 G4:|";
+//     const EXAMPLE: str = 
+// "X:1
+// T:Speed the Plough
+// M:4/4
+// C:Trad.
+// K:G
+// |:GABc dedB|dedB dedB|c2ec B2dB|c2A2 A2BA|
+//   GABc dedB|dedB dedB|c2ec B2dB|A2F2 G4:|
+// |:g2gf gdBd|g2f2 e2d2|c2ec B2dB|c2A2 A2df|
+//   g2gf g2Bd|g2f2 e2d2|c2ec B2dB|A2F2 G4:|";
 
 
-}
+// }
