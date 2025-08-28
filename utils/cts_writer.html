@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluetooth Time Writer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+        }
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bluetooth Current Time Service Writer</h1>
+        <p>This app connects to a Bluetooth device and writes the current time to its Current Time Service.</p>
+        <p>Use chromium, and enable "Experimental Web Platform features"</p>
+        
+        <button id="connectBtn">Connect to Device</button>
+        <button id="writeTimeBtn" disabled>Write Current Time</button>
+        
+        <div id="status" class="status">Ready to connect...</div>
+        
+        <div style="margin-top: 20px;">
+            <h3>Current Time:</h3>
+            <div id="currentTime" style="font-size: 18px; font-weight: bold;"></div>
+        </div>
+    </div>
+
+    <script>
+        let device = null;
+        let currentTimeCharacteristic = null;
+        
+        // Current Time Service UUID
+        const CURRENT_TIME_SERVICE_UUID = 0x1805;
+        const CURRENT_TIME_CHARACTERISTIC_UUID = 0x2A2B;
+        
+        const connectBtn = document.getElementById('connectBtn');
+        const writeTimeBtn = document.getElementById('writeTimeBtn');
+        const statusDiv = document.getElementById('status');
+        const currentTimeDiv = document.getElementById('currentTime');
+        
+        // Update current time display
+        function updateCurrentTimeDisplay() {
+            const now = new Date();
+            currentTimeDiv.textContent = now.toLocaleString();
+        }
+        
+        // Update time display every second
+        setInterval(updateCurrentTimeDisplay, 1000);
+        updateCurrentTimeDisplay();
+        
+        function updateStatus(message, type = '') {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+        
+        // Early feature checks for Web Bluetooth and secure context
+        // Show a helpful error and disable the connect button when unsupported
+        (function checkWebBluetoothSupport() {
+            if (!('bluetooth' in navigator)) {
+                updateStatus('Web Bluetooth not available. Use Chrome/Edge and load over https:// or http://localhost (not file://).', 'error');
+                connectBtn.disabled = true;
+                return;
+            }
+            if (!window.isSecureContext) {
+                updateStatus('This page must be served from a secure context (https:// or http://localhost).', 'error');
+                // Disable connect to avoid confusing errors on file://
+                connectBtn.disabled = true;
+            }
+        })();
+        
+        // Convert Date to Current Time characteristic format
+        function dateToCurrentTimeBytes(date) {
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1; // JavaScript months are 0-based
+            const day = date.getDate();
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const seconds = date.getSeconds();
+            const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay(); // Sunday = 7 in BLE
+            const fractions256 = Math.floor((date.getMilliseconds() / 1000) * 256);
+            
+            // Current Time characteristic is 10 bytes
+            const buffer = new ArrayBuffer(10);
+            const view = new DataView(buffer);
+            
+            view.setUint16(0, year, true); // Little endian
+            view.setUint8(2, month);
+            view.setUint8(3, day);
+            view.setUint8(4, hours);
+            view.setUint8(5, minutes);
+            view.setUint8(6, seconds);
+            view.setUint8(7, dayOfWeek);
+            view.setUint8(8, fractions256);
+            view.setUint8(9, 0); // Adjust reason (0 = no adjustment)
+            
+            return buffer;
+        }
+        
+        connectBtn.addEventListener('click', async () => {
+            try {
+                if (!('bluetooth' in navigator)) {
+                    throw new Error('Web Bluetooth not available in this browser/context');
+                }
+                if (!window.isSecureContext) {
+                    throw new Error('Page is not in a secure context (https:// or http://localhost required)');
+                }
+
+                updateStatus('Scanning for devices...');
+                
+                // Request device; accept all to avoid relying on advertised service UUIDs
+                device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [CURRENT_TIME_SERVICE_UUID]
+                });
+
+                // Attach disconnect handler as soon as we have a device reference
+                device.addEventListener('gattserverdisconnected', () => {
+                    updateStatus('Device disconnected', 'error');
+                    connectBtn.textContent = 'Connect to Device';
+                    connectBtn.disabled = false;
+                    writeTimeBtn.disabled = true;
+                    device = null;
+                    currentTimeCharacteristic = null;
+                });
+                
+                updateStatus('Connecting to device...');
+                const server = await device.gatt.connect();
+                
+                updateStatus('Getting Current Time Service...');
+                
+                // Optional: enumerate services to debug permissions/visibility
+                try {
+                    const services = await server.getPrimaryServices();
+                    console.log('Primary services on device:', services.map(s => s.uuid));
+                } catch (e) {
+                    console.warn('Listing primary services failed (non-fatal):', e);
+                }
+
+                const service = await server.getPrimaryService(CURRENT_TIME_SERVICE_UUID);
+                
+                updateStatus('Getting Current Time Characteristic...');
+                currentTimeCharacteristic = await service.getCharacteristic(CURRENT_TIME_CHARACTERISTIC_UUID);
+                
+                updateStatus(`Connected to: ${device.name || 'Unknown Device'}`, 'success');
+                connectBtn.textContent = 'Connected';
+                connectBtn.disabled = true;
+                writeTimeBtn.disabled = false;
+                
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error('Connection failed:', error);
+            }
+        });
+        
+        writeTimeBtn.addEventListener('click', async () => {
+            try {
+                if (!currentTimeCharacteristic) {
+                    throw new Error('Not connected to device');
+                }
+                
+                updateStatus('Writing current time to device...');
+                
+                const currentTime = new Date();
+                const timeBytes = dateToCurrentTimeBytes(currentTime);
+                const bytes = new Uint8Array(timeBytes);
+                
+                if ('writeValueWithResponse' in currentTimeCharacteristic) {
+                    // Prefer explicit response for clearer errors
+                    // @ts-ignore - Web Bluetooth types may vary by browser
+                    await currentTimeCharacteristic.writeValueWithResponse(bytes);
+                } else {
+                    await currentTimeCharacteristic.writeValue(bytes);
+                }
+                
+                updateStatus(`Time written successfully: ${currentTime.toLocaleString()}`, 'success');
+                
+            } catch (error) {
+                updateStatus(`Error writing time: ${error.message}`, 'error');
+                console.error('Write failed:', error);
+            }
+        });
+    </script>
+</body>
+</html>

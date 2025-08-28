@@ -10,20 +10,20 @@ use hal::ble::gattservapp::*;
 use hal::ble::{gatt_uuid, TmosEvent};
 use hal::{ble};
 
+use crate::ble_periph::hid_service::keypresser;
 use crate::log;
 
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
-use embassy_time::{Duration, Ticker, Timer};
-use core::sync::atomic::{AtomicBool, Ordering};
-use hal::gpio::{AnyPin, Level, Output, OutputDrive };
+use embassy_time::{Duration, Timer};
 
 pub mod blinky_service;
 pub mod current_time_service;
+pub mod hid_service; // added
 
-use blinky_service::{BLINKY_SERV_UUID, BLINKY_CLIENT_CHARCFG, blinky_notification};
+use blinky_service::{BLINKY_CLIENT_CHARCFG, blinky_notification};
 
 const GAP_PAPAJ: u16 = 0x049F;
 
@@ -87,12 +87,15 @@ static mut ADVERT_DATA: &[u8] = &[
     GAP_ADTYPE_FLAGS,
     GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED,
     // https://www.bluetooth.com/specifications/assigned-numbers/
-    0x04,                             // length of this data including the data type byte
+    0x04,                             // length of this data including the data type byte (type + 2-byte company id + 1 payload byte)
     GAP_ADTYPE_MANUFACTURER_SPECIFIC, // manufacturer specific advertisement data type
     lo_u16(GAP_PAPAJ),                // 0x07D7, Nanjing Qinheng Microelectronics Co., Ltd.
     hi_u16(GAP_PAPAJ),
-    0x01, // remains manufacturer specific data
-
+    0x01, // one byte of manufacturer specific payload
+    // Appearance: HID Keyboard (0x03C1)
+    0x03, GAP_ADTYPE_APPEARANCE, (0x03C1 & 0xFF) as u8, (0x03C1 >> 8) as u8,
+    // Advertise Complete List of 16-bit Service UUIDs: HID (0x1812)
+    0x03, GAP_ADTYPE_16BIT_COMPLETE, lo_u16(self::hid_service::HID_SERV_UUID), hi_u16(self::hid_service::HID_SERV_UUID),
     // advertised service
     // 0x03,                  // length of this data
     // GAP_ADTYPE_16BIT_MORE, // some of the UUID's, but not all
@@ -100,10 +103,10 @@ static mut ADVERT_DATA: &[u8] = &[
     // hi_u16(BLINKY_SERV_UUID),
 
     // advertise Current Time Service 0x1805
-    0x03,
-    GAP_ADTYPE_16BIT_MORE,
-    lo_u16(gatt_uuid::CURRENT_TIME_UUID),
-    hi_u16(gatt_uuid::CURRENT_TIME_UUID),
+    // 0x03,
+    // GAP_ADTYPE_16BIT_MORE,
+    // lo_u16(gatt_uuid::CURRENT_TIME_UUID),
+    // hi_u16(gatt_uuid::CURRENT_TIME_UUID),
 ];
 
 // GAP GATT Attributes
@@ -421,13 +424,15 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
             }
             // if advertising stopped
             GAPROLE_WAITING if LAST_STATE == GAPROLE_ADVERTISING => {
-                // if fast advertising switch to slow
+                // // if fast advertising switch to slow
                 if GAP_GetParamValue(TGAP_DISC_ADV_INT_MIN) == DEFAULT_FAST_ADV_INTERVAL {
                     let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, DEFAULT_SLOW_ADV_INTERVAL);
                     let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, DEFAULT_SLOW_ADV_INTERVAL);
                     let _ = GAP_SetParamValue(TGAP_GEN_DISC_ADV_MIN, DEFAULT_SLOW_ADV_DURATION);
                     let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &true as *const _ as _);
                 }
+                // let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &false as *const _ as _);
+
             }
             // if started
             GAPROLE_STARTED => {
@@ -445,6 +450,10 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                 system_id[3] = 0;
 
                 ptr::copy(system_id.as_ptr(), SYSTEM_ID.as_mut_ptr(), 8);
+
+                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, DEFAULT_FAST_ADV_INTERVAL);
+                let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, DEFAULT_FAST_ADV_INTERVAL);
+                let _ = GAP_SetParamValue(TGAP_GEN_DISC_ADV_MIN, DEFAULT_FAST_ADV_DURATION);
             }
             GAPROLE_ADVERTISING => {} // now advertising
             _ => {
@@ -491,10 +500,15 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                         DEFAULT_DESIRED_CONN_TIMEOUT,
                         task_id,
                     )
-                    .unwrap();
+                    .unwrap_or_else(|e| {
+                        log!("PeripheralConnParamUpdateReq error {:?}", e);
+                    });
+                    
+                    spawner.spawn(keypresser(conn_handle)).unwrap();
                 },
                 AppEvent::Disconnected(conn_handle) => unsafe {
                     GATTServApp::init_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_mut_ptr());
+                    GATTServApp::init_char_cfg(conn_handle, crate::ble_periph::hid_service::HID_INPUT_CCCD.as_mut_ptr());
                 },
                 AppEvent::BlinkySubscribed(conn_handle) =>  {
                     spawner.spawn(blinky_notification(conn_handle)).unwrap();

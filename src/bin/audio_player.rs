@@ -1,0 +1,116 @@
+#![feature(impl_trait_in_assoc_type)]
+#![feature(type_alias_impl_trait)]
+
+#![no_std]
+#![no_main]
+
+
+use {ch58x_hal as hal};
+use hal::delay::CycleDelay;
+use hal::gpio::{AnyPin, Input, Level, Output, OutputDrive, Pin, Pull};
+
+use ch58x_hal::pac::Interrupt;
+// use core::ptr::{read_volatile, write_volatile};
+
+use embedded_hal_local::delay::DelayNs;
+// use hal::delay::CycleDelay;
+
+
+use hal::rtc::{Rtc};
+
+use embassy_executor::Spawner;
+use embassy_time::{Duration,  Timer};
+
+
+// use flash::flash_test;
+
+use papajbadge_rs::helpers::{enable_sleep, enter_sleep};
+// use papajbadge_rs::audio::{get_char_for_t, chiptune_loop};
+use papajbadge_rs::logger::init as init_logger;
+
+use papajbadge_rs::{get_configured_rtc, log};
+
+use hal::uart::UartTx;
+
+
+#[embassy_executor::task]
+async fn async_blink(pin: AnyPin) {
+    let mut led = Output::new(pin, Level::Low, OutputDrive::_5mA);
+
+    loop {
+        led.set_high();
+        Timer::after(Duration::from_millis(150)).await;
+        led.set_low();
+        Timer::after(Duration::from_millis(150)).await;
+    }
+}
+
+
+pub fn get_char_for_t(t: i32) -> u8 {
+    let s = b"36364689";
+    let part1 = ((t * (s[(t >> 13 & 7) as usize] & 15) as i32) / 12 & 128) as u8;
+    let part2 = ((((((t >> 12) ^ ((t >> 12) - 2)) % 11) * t) / 4 | (t >> 13)) & 127) as u8;
+    part1 + part2
+}
+
+pub fn chiptune_loop() -> ! {
+    
+    let mut period: u32 = 20;
+    let mut delay = CycleDelay;
+
+    unsafe {
+        let tmr = ch58x_hal::pac::TMR0::steal();
+        tmr.ctrl_mod().write(|w| w.tmr_all_clear().bit(true));
+        tmr.cnt_end().write(|w| w.cnt_end().bits(0x100));
+        tmr.ctrl_mod().write(|w| w.tmr_all_clear().bit(true));
+        tmr.ctrl_mod().write(|w| 
+            w.tmr_all_clear().bit(false)
+            .tmr_mode_in().bit(false)
+            .tmr_count_en().bit(true)
+            .tmr_out_polar__rb_tmr_cap_count().bit(true)
+            .tmr_pwm_repeat__rb_tmr_cap_edge().bits(0b11)
+            .tmr_out_en().bit(true)
+        );
+        tmr.fifo().write(|w|  w.fifo().bits(0x08) );
+
+        loop {
+            let v = get_char_for_t(period as i32);
+            tmr.fifo().write(|w|  w.fifo().bits(v as u32) );
+            delay.delay_us(10);
+            period = period.wrapping_add(1);
+        }
+    }
+}
+
+
+
+#[embassy_executor::main(entry = "qingke_rt::entry")]
+async fn main(spawner: Spawner) -> ! {
+    let mut config = hal::Config::default(); 
+    // config.low_power = true; //800uA->150uA
+
+    let p = hal::init(config);
+    hal::embassy::init();
+
+    let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
+    // ena.set_low();
+    ena.set_high();
+
+    let but = Input::new(p.PB22, Pull::None);
+
+    let serial = UartTx::new(p.UART0, p.PB7, Default::default()).unwrap();
+    init_logger(serial);
+    log!( "\n\n\nHello World!");
+
+    if but.is_low() {
+        log!("Button pressed, loopin' time\n");
+        spawner.spawn(async_blink(p.PA8.degrade())).unwrap();
+
+        loop{
+            Timer::after(Duration::from_millis(1000)).await;
+        }
+    } else {
+        let _ = Output::new(p.PA9, Level::Low,OutputDrive::_20mA);
+        chiptune_loop();
+    }
+}

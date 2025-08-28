@@ -3,3 +3,5 @@
 /trash
 *.bin
 *.hex
+
+/periph_hid_example/

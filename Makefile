@@ -25,7 +25,7 @@ attach:
 		-ex "target extended-remote :3333" \
 		-ex "set remotetimeout 5000" \
 		-ex "monitor reset halt" \
-		--tui
+		# --tui
 
 .PHONY: spawn-openocd
 spawn-openocd:

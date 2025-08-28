@@ -5,17 +5,16 @@
 
 use ch58x_hal as hal;
 use embassy_executor::Spawner;
-use embassy_time::{Duration, Timer};
-use hal::gpio::{AnyPin, Level, Output, OutputDrive, Pin};
+use hal::gpio::{Level, Output, OutputDrive, Pin};
 use hal::uart::UartTx;
 use hal::{ble};
-use papajbadge_rs::ble_periph::*;
 use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log, tmos_mainloop};
 
 use papajbadge_rs::ble_periph::{common_init, devinfo_init, peripheral};
 use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
 use papajbadge_rs::ble_periph::current_time_service::current_time_init;
+use papajbadge_rs::ble_periph::hid_service::hid_init; // added
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
@@ -50,6 +49,7 @@ async fn main(spawner: Spawner) -> ! {
     unsafe {
         common_init();
         devinfo_init();
+        hid_init(); // added
         blinky_init();
         current_time_init();
     }
