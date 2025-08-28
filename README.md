@@ -16,6 +16,18 @@ Do not use WCH-Link, it nearly works, but contains some bugs, and does not work.
 
 ## The workflow
 
+### Setup
+
+Install rustup and wlink. On Nix(OS), `nix-shell` to use `shell.nix`.
+
+### Building
+
+`cargo build --release`
+
+This will build the default binary (`audio_player.rs`).
+
+Debug builds are currently broken - see below.
+
 ### Flashing as the WCH intended (via USB)
 
 `wchisp flash <PATH>`. You must press "boot" button and reset power to enter ISP mode
