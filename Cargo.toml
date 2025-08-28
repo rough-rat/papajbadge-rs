@@ -14,7 +14,8 @@ ble = []
 [dependencies]
 # ch58x = { path = "ch58x", features = ["ch58'x", "rt"] }
 # ch58x-hal = { version = "0.0.2", features = ["default"] } <-is not identical to git version
-ch58x-hal = { git="https://github.com/ch32-rs/ch58x-hal.git", features = ["default", "embassy"] }
+ch58x-hal = { git="https://github.com/cr1tbit/ch58x-hal.git", features = ["default", "embassy"] }
+# ch58x-hal = { path = "/home/critbit/Projects/firmware/ch58x-hal", features = ["default", "embassy"] }
 
 critical-section = "1.1.2"
 qingke = { version = "0.1.7", features = ["critical-section-impl"] }
