@@ -124,7 +124,9 @@ You may also customize yout workflow with .cargo/config.toml.
 
 ## Debug build issues
 
-TODO expand. Differences between build and release
+This seems to be because `with_safe_access` is broken on debug builds. Its intent is to use some cursed hardware peripheral functionality where some registers are 'protected' and must be written in a very special dance alongside some other pokes to other MMIO, within some window of time. Debug builds create very blown up mutation lambdas that seem to blow over that cycle/time budget.
+
+The effect is that some stuff that's guarded behind these pokes (eg. clock setup) does not get applied on debug builds:
 
 ```
 debug build
@@ -143,5 +145,3 @@ debug build
 0x40001040:	0xee0c8240	0x0010dd00	0xca000094	0x00320000
 0x40001050:	0x010000b2	0x00000000	0x0000a00f	0x00000000
 ```
-
-https://codeberg.org/20-100/Awesome_RISC-V/src/branch/master/WCH/WCH_TMOS_HowTo.pdf
