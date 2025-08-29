@@ -1,67 +1,13 @@
-[package]
-name = "papajbadge-rs"
-version = "0.2.136"
-edition = "2021"
-categories = ["embedded", "no-std"]
-license = "MIT"
-
-[features]
-default = ["ble", "embassy"]
-embassy = ["dep:embassy-sync"]
-defmt = ["dep:defmt"]
-ble = []
-
-[dependencies]
-# ch58x = { path = "ch58x", features = ["ch58'x", "rt"] }
-# ch58x-hal = { version = "0.0.2", features = ["default"] } <-is not identical to git version
-ch58x-hal = { git="https://github.com/cr1tbit/ch58x-hal.git", features = ["default", "embassy"] }
-# ch58x-hal = { path = "/home/critbit/Projects/firmware/ch58x-hal", features = ["default", "embassy"] }
-
-critical-section = "1.1.2"
-qingke = { version = "0.1.7", features = ["critical-section-impl"] }
-qingke-rt = { version = "0.1.7", features = ["highcode"] }
-
-fugit = "0.3.7"
-nb = "1.1.0"
-
-embedded-hal-local = { version = "1.0.0-rc.2", package = "embedded-hal" }
-
-defmt = { version = "1.0.1", optional = true }
-spi-memory = "0.2.0"
-
-embassy-executor = { version = "0.5.0", features = [
-    "nightly",
-    "arch-riscv32",
-    "executor-thread",
-    "integrated-timers"
-] }
-
-embassy-futures = "0.1.1"
-embassy-sync = { version = "0.5.0", optional = true }
-embassy-time = { version = "0.3.0" }
-embassy-time-driver = { version = "0.1.0", features = ["tick-hz-32_768"] }
-
-# Add local ABC music parser crate
-# abc = { path = "abc" }
-abc_player = { path = "/home/critbit/Projects/firmware/01_stolen/abc_notation_player_rs" }
-
-# embassy-futures = "0.1.1"
-
+[workspace]
+resolver = "3"
+members = ["abc", "papajbadge-rs"]
+default-members = ["papajbadge-rs"]
 
 [profile.dev]
 lto = false
 opt-level = 0
 
-# [dev-dependencies]
-
-# embassy-futures = "0.1.1"
-# # embassy time driver
-# heapless = "0.8.0"
-# embedded-alloc = "0.5.0"
-# embedded-sdmmc = "0.6.0"
-
 [profile.release]
-# panic = "unwind"
 panic = "abort"
 opt-level = "z"
 lto = false

@@ -2,6 +2,7 @@
 }:
 
 pkgs.mkShell {
+  name = "papaj";
   buildInputs = with pkgs; [
     wchisp wlink rustup
   ];
