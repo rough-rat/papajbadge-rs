@@ -127,13 +127,13 @@ pub unsafe fn rtc_get_time() -> CurrentTime {
 }
 
 pub fn rtc_set_time(ct: CurrentTime) {
-    // let mut rtc = Rtc {};
+    let mut rtc = Rtc {};
     let now = ct.to_datetime();
     
-    // rtc.set_datatime(now);
+    rtc.set_datatime(now);
     // using RTC here seems to crash something lol.
     // the time should probably be pushed to some queue and set in another context
-    log!("MOCK SET TODO: {:02}:{:02}:{:02} {:02}/{:02}/{}", 
+    log!("MOCK SET TODO: {:02}:{:02}:{:02} {:02}/{:02}/{}",
             now.hour, now.minute, now.second, now.month, now.day, now.year);
 }
 

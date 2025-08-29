@@ -10,7 +10,7 @@ use hal::ble::gattservapp::*;
 use hal::ble::{gatt_uuid, TmosEvent};
 use hal::{ble};
 
-use crate::ble_periph::hid_service::keypresser;
+// use crate::ble_periph::hid_service::keypresser;
 use crate::log;
 
 use embassy_executor::Spawner;
@@ -19,11 +19,11 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
 
-pub mod blinky_service;
+// pub mod blinky_service;
 pub mod current_time_service;
-pub mod hid_service; // added
+// pub mod hid_service; // added
 
-use blinky_service::{BLINKY_CLIENT_CHARCFG, blinky_notification};
+// use blinky_service::{BLINKY_CLIENT_CHARCFG, blinky_notification};
 
 const GAP_PAPAJ: u16 = 0x049F;
 
@@ -373,7 +373,7 @@ pub enum AppEvent {
 
 static APP_CHANNEL: Channel<CriticalSectionRawMutex, AppEvent, 3> = Channel::new();
 
-/// Default desired minimum connection interval (units of 1.25ms)
+/// Default desired minimum connection interval (units of 1.25ms) //20
 const DEFAULT_DESIRED_MIN_CONN_INTERVAL: u16 = 20;
 /// Default desired maximum connection interval (units of 1.25ms)
 const DEFAULT_DESIRED_MAX_CONN_INTERVAL: u16 = 160;
@@ -507,11 +507,11 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                     // spawner.spawn(keypresser(conn_handle)).unwrap();
                 },
                 AppEvent::Disconnected(conn_handle) => unsafe {
-                    GATTServApp::init_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_mut_ptr());
-                    GATTServApp::init_char_cfg(conn_handle, crate::ble_periph::hid_service::HID_INPUT_CCCD.as_mut_ptr());
+                    // GATTServApp::init_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_mut_ptr());
+                    // GATTServApp::init_char_cfg(conn_handle, crate::ble_periph::hid_service::HID_INPUT_CCCD.as_mut_ptr());
                 },
                 AppEvent::BlinkySubscribed(conn_handle) =>  {
-                    spawner.spawn(blinky_notification(conn_handle)).unwrap();
+                    // spawner.spawn(blinky_notification(conn_handle)).unwrap();
                 },
                 _ => {
                     // other event. just broadcast

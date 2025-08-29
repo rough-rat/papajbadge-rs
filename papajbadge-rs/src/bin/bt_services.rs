@@ -12,9 +12,9 @@ use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log, tmos_mainloop};
 
 use papajbadge_rs::ble_periph::{common_init, devinfo_init, peripheral};
-use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
+// use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
 use papajbadge_rs::ble_periph::current_time_service::current_time_init;
-use papajbadge_rs::ble_periph::hid_service::hid_init; // added
+// use papajbadge_rs::ble_periph::hid_service::hid_init; // added
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
@@ -30,7 +30,7 @@ async fn main(spawner: Spawner) -> ! {
     init_logger(serial);
     log!("\n\n\nHello World!");
 
-    spawner.spawn(blinky_service_loop(p.PA8.degrade())).unwrap();
+    // spawner.spawn(blinky_service_loop(p.PA8.degrade())).unwrap();
 
     let rtc = get_configured_rtc();
 
