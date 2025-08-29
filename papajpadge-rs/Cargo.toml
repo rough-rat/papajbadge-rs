@@ -43,7 +43,7 @@ embassy-time-driver = { version = "0.1.0", features = ["tick-hz-32_768"] }
 
 # Add local ABC music parser crate
 # abc = { path = "abc" }
-abc_player = { path = "/home/critbit/Projects/firmware/01_stolen/abc_notation_player_rs" }
+abc = { path = "../abc" }
 
 # embassy-futures = "0.1.1"
 
