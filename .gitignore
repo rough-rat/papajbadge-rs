@@ -1,7 +1,6 @@
-/target
-/Cargo.lock
-/trash
-*.bin
-*.hex
+**/target
+**/trash
+**/*.bin
+**/*.hex
 
-/periph_hid_example/
+**/periph_hid_example/

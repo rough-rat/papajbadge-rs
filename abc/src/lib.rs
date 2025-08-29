@@ -4,9 +4,6 @@
 #[macro_use]
 extern crate std;
 
-#[cfg(test)]
-use std::println;
-
 #[derive(Debug)]
 pub struct Event {
     pub duration: u32,      // milliseconds
@@ -183,4 +180,14 @@ fn parse_fraction(bytes: &[u8]) -> Option<(u32, u32)> {
     let n = parts.next()?.parse().ok()?;
     let d = parts.next()?.parse().ok()?;
     Some((n, d))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        assert!(true);
+    }
 }
