@@ -157,8 +157,10 @@ async fn play_abc() {
         K:C
         C6 | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FFG AGF | E3 E3- |
         E3 C2 C | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FDE FED | C6 | x6 |
-        E6- | EDE FED | C3 C3- | C3 D2 E    | F3 F3-  | F2 F FFE | D3 D3- | D2 G, C2 D |
-        E3 E3-  | E2 E F2 D | C3 C3- | C6
+        E6- | EDE FED | C3 C3- | C3 D2 E | F3 F3-  | F2 F FFE | D3 D3- | D2 G, C2 D |
+        E3 E3- | E2 E F2 D | C3 C3 | x6 |
+        C6 | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FFG AGF | E3 E3- |
+        E3 C2 C | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FDE FED | C6 | x6 |
         ";
     let iter = AbcIter::new(abc, 320).expect("valid header");
 
