@@ -93,9 +93,9 @@ static mut ADVERT_DATA: &[u8] = &[
     hi_u16(GAP_PAPAJ),
     0x01, // one byte of manufacturer specific payload
     // Appearance: HID Keyboard (0x03C1)
-    0x03, GAP_ADTYPE_APPEARANCE, (0x03C1 & 0xFF) as u8, (0x03C1 >> 8) as u8,
+    // 0x03, GAP_ADTYPE_APPEARANCE, (0x03C1 & 0xFF) as u8, (0x03C1 >> 8) as u8,
     // Advertise Complete List of 16-bit Service UUIDs: HID (0x1812)
-    0x03, GAP_ADTYPE_16BIT_COMPLETE, lo_u16(self::hid_service::HID_SERV_UUID), hi_u16(self::hid_service::HID_SERV_UUID),
+    // 0x03, GAP_ADTYPE_16BIT_COMPLETE, lo_u16(self::hid_service::HID_SERV_UUID), hi_u16(self::hid_service::HID_SERV_UUID),
     // advertised service
     // 0x03,                  // length of this data
     // GAP_ADTYPE_16BIT_MORE, // some of the UUID's, but not all
@@ -103,10 +103,10 @@ static mut ADVERT_DATA: &[u8] = &[
     // hi_u16(BLINKY_SERV_UUID),
 
     // advertise Current Time Service 0x1805
-    // 0x03,
-    // GAP_ADTYPE_16BIT_MORE,
-    // lo_u16(gatt_uuid::CURRENT_TIME_UUID),
-    // hi_u16(gatt_uuid::CURRENT_TIME_UUID),
+    0x03,
+    GAP_ADTYPE_16BIT_MORE,
+    lo_u16(gatt_uuid::CURRENT_TIME_UUID),
+    hi_u16(gatt_uuid::CURRENT_TIME_UUID),
 ];
 
 // GAP GATT Attributes
@@ -504,7 +504,7 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                         log!("PeripheralConnParamUpdateReq error {:?}", e);
                     });
                     
-                    spawner.spawn(keypresser(conn_handle)).unwrap();
+                    // spawner.spawn(keypresser(conn_handle)).unwrap();
                 },
                 AppEvent::Disconnected(conn_handle) => unsafe {
                     GATTServApp::init_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_mut_ptr());

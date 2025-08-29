@@ -127,7 +127,7 @@ pub unsafe fn rtc_get_time() -> CurrentTime {
 }
 
 pub fn rtc_set_time(ct: CurrentTime) {
-    let mut rtc = Rtc {};
+    // let mut rtc = Rtc {};
     let now = ct.to_datetime();
     
     // rtc.set_datatime(now);

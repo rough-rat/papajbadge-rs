@@ -19,6 +19,9 @@ use papajbadge_rs::helpers::{enable_sleep, enter_sleep};
 // use papajbadge_rs::audio::{get_char_for_t, chiptune_loop};
 use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log};
+// Import ABC parser from local crate
+use abc_player::AbcIter;
+
 
 #[embassy_executor::task]
 async fn async_blink(pin: AnyPin) {
@@ -85,8 +88,10 @@ fn set_pwm(tmr: ch58x_hal::pac::TMR0, freq: Option<u32>, duty: u32) -> ch58x_hal
         unsafe {
             if let Some(freq) = freq {
                 let cnt_end = 24_000_000 / freq;
-                tmr.cnt_end().write(|w| w.cnt_end().bits(cnt_end));
                 let duty = (cnt_end * duty) / 100;
+
+                log!("Freq: {}, cnt_end: {}, duty: {}", freq, cnt_end, duty);
+                tmr.cnt_end().write(|w| w.cnt_end().bits(cnt_end));
                 tmr.fifo().write(|w| w.fifo().bits(duty));
             } else {
                 tmr.fifo().write(|w| w.fifo().bits(0x08));
@@ -99,7 +104,7 @@ fn set_pwm(tmr: ch58x_hal::pac::TMR0, freq: Option<u32>, duty: u32) -> ch58x_hal
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default();
-    // config.low_power = true; //800uA->150uA
+    config.low_power = true; //800uA->150uA
 
     let p = hal::init(config);
     hal::embassy::init();
@@ -139,47 +144,42 @@ async fn main(spawner: Spawner) -> ! {
     }
 }
 
-struct Event {
-    duration: u32,
-    freq: Option<u32>,
-}
-
-struct AbcIter {
-    content: &'static [u8],
-}
-
-impl Iterator for AbcIter {
-    type Item = Event;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
-
-impl AbcIter {
-    fn new(content: &'static [u8]) -> Self {
-        Self { content }
-    }
-}
+// Remove local Event/AbcIter definitions; use the versions from the `abc` crate
 
 #[embassy_executor::task]
 async fn play_abc() {
-    let abc = b"X:1
-T:Barka
-M:6/8
-L:1/8
-R:jig
-K:C
-C6- | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FFG AGF | E3 E3- |
-E3 C2 C | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FDE FED | C6 | x6 |
-E6- | EDE FED | C3 C3- | C3 D2 E | F3 F3-  | F2 F FFE | D3 D3- | D2 G, C2 D |
-E3 E3-  | E2 E F2 D | C3 C3- | C6 |";
-    let mut iter = AbcIter::new(abc);
+    let abc = b"
+        X:1
+        T:Barka
+        M:6/8
+        L:1/8
+        R:jig
+        K:C
+        C6 | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FFG AGF | E3 E3- |
+        E3 C2 C | A3 A3- | AAB cBA | G3 G3- | G3 F2 E | F3 F3- | FDE FED | C6 | x6 |
+        E6- | EDE FED | C3 C3- | C3 D2 E    | F3 F3-  | F2 F FFE | D3 D3- | D2 G, C2 D |
+        E3 E3-  | E2 E F2 D | C3 C3- | C6
+        ";
+    let iter = AbcIter::new(abc, 320).expect("valid header");
 
     let mut tmr = setup_pwm();
 
-    while let Some(event) = iter.next() {
-        tmr = set_pwm(tmr, event.freq, 50);
-        Timer::after(Duration::from_millis(event.duration as u64)).await;
+    const scaler: u32 = 1000_00;
+
+    for ev in iter {
+        log!("{:?}", ev);
+        let delay = ev.duration*200;
+        // let period_us :Option<u32> = match ev.freq {
+        //     Some(f) => Some(scaler / f),
+        //     None => None,
+        // };
+        // tmr = set_pwm(tmr, period_us, 50);
+        tmr = set_pwm(tmr, ev.freq, 10);
+        Timer::after(Duration::from_millis(delay as u64)).await;
     }
+
+    // while let Some(event) = iter.next() {
+    //     tmr = set_pwm(tmr, event.freq, 50);
+    //     Timer::after(Duration::from_millis(event.duration as u64)).await;
+    // }
 }

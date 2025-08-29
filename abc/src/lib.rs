@@ -16,6 +16,8 @@ pub struct AbcIter{
     cursor: usize,
 }
 
+// use papajbadge_rs::log;
+
 impl Iterator for AbcIter {
     type Item = Event;
 
@@ -49,7 +51,7 @@ impl Iterator for AbcIter {
         }
 
         let slice = &self.content[start..start+len];
-        println!("{:?}", String::from_utf8_lossy(slice));
+        log!("{:?}", String::from_utf8_lossy(slice));
         let freq = note_to_freq(slice);
 
         Some(Event {

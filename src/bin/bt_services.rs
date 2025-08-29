@@ -49,9 +49,9 @@ async fn main(spawner: Spawner) -> ! {
     unsafe {
         common_init();
         devinfo_init();
-        blinky_init();
+        // blinky_init();
         current_time_init();
-        hid_init(); // added
+        // hid_init(); // added
     }
 
     // Main_Circulation

@@ -60,8 +60,8 @@ async fn main(spawner: Spawner) -> ! {
     hal::embassy::init();
 
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
-    // ena.set_low();
-    ena.set_high();
+    ena.set_low();
+    // ena.set_high();
 
 
     let but = Input::new(p.PB22, Pull::None);
@@ -113,7 +113,7 @@ fn rtc_loop(rtc: Rtc, mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> ! {
     let mut delay = CycleDelay;
 
     loop{
-        led.toggle();
+        // led.toggle();
 
         enter_sleep();       
         delay.delay_us(1000);
@@ -121,6 +121,9 @@ fn rtc_loop(rtc: Rtc, mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> ! {
         log!("T{:02}:{:02}:{:02}, loop {}\n", 
             now.hour, now.minute, now.second, counter);
         counter += 1;
+        if (now.second % 5) == 0 {
+            led.toggle();
+        }
         delay.delay_us(500);
     }
 }

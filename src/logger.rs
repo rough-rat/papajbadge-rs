@@ -7,6 +7,7 @@ use critical_section::Mutex;
 
 // Single global UART transmitter protected by critical section so it can be
 // used from interrupts and main code without race conditions.
+
 static SERIAL: Mutex<RefCell<Option<UartTx<'static, peripherals::UART0>>>> = Mutex::new(RefCell::new(None));
 
 /// Initialize global logger with an already configured UART transmitter.
