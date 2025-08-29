@@ -3,6 +3,7 @@
 #![no_std]
 #![no_main]
 
+use ch58x_hal::ble::MacAddress;
 use ch58x_hal as hal;
 use embassy_executor::Spawner;
 use hal::gpio::{Level, Output, OutputDrive, Pin};
@@ -42,7 +43,8 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut ble_config = ble::Config::default();
     ble_config.pa_config = None;
-    ble_config.mac_addr = [0x21, 0x37, 0x04, 0x20, 0x69, 0x96].into();
+    ble_config.mac_addr = build_mac();
+    log!("BLE MAC: {:02x?}", ble_config.mac_addr);
     let (task_id, sub) = hal::ble::init(ble_config).unwrap();
     log!("BLE hal task id: {}", task_id);
 
@@ -59,4 +61,18 @@ async fn main(spawner: Spawner) -> ! {
 
     // Application code
     peripheral(spawner, task_id, sub).await
+}
+
+fn build_mac() -> MacAddress {
+    let uid = hal::isp::get_unique_id();
+
+    let mut mac = [0u8; 6];
+    mac[0] = 0x21;
+    mac[1] = 0x37;
+
+    for i in 0..4 {
+        mac[i + 2] = uid[i];
+    }
+
+    mac.into()
 }
