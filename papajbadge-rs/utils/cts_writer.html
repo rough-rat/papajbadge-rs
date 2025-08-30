@@ -63,6 +63,7 @@
         <p>Use chromium, and enable "Experimental Web Platform features"</p>
         
         <button id="connectBtn">Connect to Device</button>
+        <button id="readTimeBtn" disabled>Read Device Time</button>
         <button id="writeTimeBtn" disabled>Write Current Time</button>
         
         <div id="status" class="status">Ready to connect...</div>
@@ -71,28 +72,31 @@
             <h3>Current Time:</h3>
             <div id="currentTime" style="font-size: 18px; font-weight: bold;"></div>
         </div>
+        <div style="margin-top: 20px;">
+            <h3>Device Reported Time:</h3>
+            <div id="deviceTime" style="font-size: 18px; font-weight: bold;"></div>
+        </div>
     </div>
 
     <script>
         let device = null;
         let currentTimeCharacteristic = null;
         
-        // Current Time Service UUID
         const CURRENT_TIME_SERVICE_UUID = 0x1805;
         const CURRENT_TIME_CHARACTERISTIC_UUID = 0x2A2B;
         
         const connectBtn = document.getElementById('connectBtn');
         const writeTimeBtn = document.getElementById('writeTimeBtn');
+        const readTimeBtn = document.getElementById('readTimeBtn');
         const statusDiv = document.getElementById('status');
         const currentTimeDiv = document.getElementById('currentTime');
+        const deviceTimeDiv = document.getElementById('deviceTime');
         
-        // Update current time display
         function updateCurrentTimeDisplay() {
             const now = new Date();
             currentTimeDiv.textContent = now.toLocaleString();
         }
         
-        // Update time display every second
         setInterval(updateCurrentTimeDisplay, 1000);
         updateCurrentTimeDisplay();
         
@@ -101,8 +105,6 @@
             statusDiv.className = 'status ' + type;
         }
         
-        // Early feature checks for Web Bluetooth and secure context
-        // Show a helpful error and disable the connect button when unsupported
         (function checkWebBluetoothSupport() {
             if (!('bluetooth' in navigator)) {
                 updateStatus('Web Bluetooth not available. Use Chrome/Edge and load over https:// or http://localhost (not file://).', 'error');
@@ -111,27 +113,24 @@
             }
             if (!window.isSecureContext) {
                 updateStatus('This page must be served from a secure context (https:// or http://localhost).', 'error');
-                // Disable connect to avoid confusing errors on file://
                 connectBtn.disabled = true;
             }
         })();
         
-        // Convert Date to Current Time characteristic format
         function dateToCurrentTimeBytes(date) {
             const year = date.getFullYear();
-            const month = date.getMonth() + 1; // JavaScript months are 0-based
+            const month = date.getMonth() + 1;
             const day = date.getDate();
             const hours = date.getHours();
             const minutes = date.getMinutes();
             const seconds = date.getSeconds();
-            const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay(); // Sunday = 7 in BLE
+            const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
             const fractions256 = Math.floor((date.getMilliseconds() / 1000) * 256);
             
-            // Current Time characteristic is 10 bytes
             const buffer = new ArrayBuffer(10);
             const view = new DataView(buffer);
             
-            view.setUint16(0, year, true); // Little endian
+            view.setUint16(0, year, true);
             view.setUint8(2, month);
             view.setUint8(3, day);
             view.setUint8(4, hours);
@@ -139,9 +138,45 @@
             view.setUint8(6, seconds);
             view.setUint8(7, dayOfWeek);
             view.setUint8(8, fractions256);
-            view.setUint8(9, 0); // Adjust reason (0 = no adjustment)
+            view.setUint8(9, 0);
             
             return buffer;
+        }
+
+        function dataViewToDate(view) {
+            try {
+                const year = view.getUint16(0, true);
+                const month = view.getUint8(2);
+                const day = view.getUint8(3);
+                const hours = view.getUint8(4);
+                const minutes = view.getUint8(5);
+                const seconds = view.getUint8(6);
+                const fractions256 = view.getUint8(8);
+                const ms = Math.floor((fractions256 * 1000) / 256);
+
+                if (!year || !month || month > 12 || !day || day > 31) {
+                    return null;
+                }
+                return new Date(year, month - 1, day, hours, minutes, seconds, ms);
+            } catch (e) {
+                console.warn('Failed to parse Current Time:', e);
+                return null;
+            }
+        }
+
+        async function readAndDisplayDeviceTime() {
+            if (!currentTimeCharacteristic) {
+                throw new Error('Not connected to device');
+            }
+            const value = await currentTimeCharacteristic.readValue();
+            const date = dataViewToDate(value);
+            if (date) {
+                deviceTimeDiv.textContent = date.toLocaleString();
+                return date;
+            } else {
+                deviceTimeDiv.textContent = 'Invalid/unknown time from device';
+                return null;
+            }
         }
         
         connectBtn.addEventListener('click', async () => {
@@ -155,18 +190,18 @@
 
                 updateStatus('Scanning for devices...');
                 
-                // Request device; accept all to avoid relying on advertised service UUIDs
                 device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [CURRENT_TIME_SERVICE_UUID]
                 });
 
-                // Attach disconnect handler as soon as we have a device reference
                 device.addEventListener('gattserverdisconnected', () => {
                     updateStatus('Device disconnected', 'error');
                     connectBtn.textContent = 'Connect to Device';
                     connectBtn.disabled = false;
                     writeTimeBtn.disabled = true;
+                    readTimeBtn.disabled = true;
+                    deviceTimeDiv.textContent = '';
                     device = null;
                     currentTimeCharacteristic = null;
                 });
@@ -176,7 +211,6 @@
                 
                 updateStatus('Getting Current Time Service...');
                 
-                // Optional: enumerate services to debug permissions/visibility
                 try {
                     const services = await server.getPrimaryServices();
                     console.log('Primary services on device:', services.map(s => s.uuid));
@@ -193,6 +227,31 @@
                 connectBtn.textContent = 'Connected';
                 connectBtn.disabled = true;
                 writeTimeBtn.disabled = false;
+                readTimeBtn.disabled = false;
+
+                try {
+                    updateStatus('Reading current time from device...');
+                    await readAndDisplayDeviceTime();
+                    updateStatus(`Connected to: ${device.name || 'Unknown Device'}`, 'success');
+                } catch (e) {
+                    console.warn('Initial read failed:', e);
+                }
+
+                try {
+                    if (currentTimeCharacteristic.properties && currentTimeCharacteristic.properties.notify) {
+                        await currentTimeCharacteristic.startNotifications();
+                        currentTimeCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+                            const dv = event.target.value;
+                            const date = dataViewToDate(dv);
+                            if (date) {
+                                deviceTimeDiv.textContent = date.toLocaleString();
+                            }
+                        });
+                        console.log('CTS notifications enabled');
+                    }
+                } catch (e) {
+                    console.log('CTS notifications not available:', e);
+                }
                 
             } catch (error) {
                 updateStatus(`Error: ${error.message}`, 'error');
@@ -213,8 +272,6 @@
                 const bytes = new Uint8Array(timeBytes);
                 
                 if ('writeValueWithResponse' in currentTimeCharacteristic) {
-                    // Prefer explicit response for clearer errors
-                    // @ts-ignore - Web Bluetooth types may vary by browser
                     await currentTimeCharacteristic.writeValueWithResponse(bytes);
                 } else {
                     await currentTimeCharacteristic.writeValue(bytes);
@@ -225,6 +282,17 @@
             } catch (error) {
                 updateStatus(`Error writing time: ${error.message}`, 'error');
                 console.error('Write failed:', error);
+            }
+        });
+
+        readTimeBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('Reading current time from device...');
+                await readAndDisplayDeviceTime();
+                updateStatus('Device time read', 'success');
+            } catch (error) {
+                updateStatus(`Error reading time: ${error.message}`, 'error');
+                console.error('Read failed:', error);
             }
         });
     </script>

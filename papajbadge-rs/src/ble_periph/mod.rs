@@ -3,6 +3,9 @@
 use {ch58x_hal as hal};
 use core::{ptr, slice};
 
+use ch58x_hal::rtc::DateTime;
+use ch58x_hal::rtc::Rtc;
+use ch58x_hal::soft_reset;
 use hal::ble::ffi::*;
 use hal::ble::gap::*;
 use hal::ble::gatt::*;
@@ -10,6 +13,7 @@ use hal::ble::gattservapp::*;
 use hal::ble::{gatt_uuid, TmosEvent};
 use hal::{ble};
 
+use crate::ble_periph::current_time_service::CurrentTime;
 // use crate::ble_periph::hid_service::keypresser;
 use crate::log;
 
@@ -369,20 +373,21 @@ pub enum AppEvent {
     Disconnected(u16),
     BlinkySubscribed(u16),
     BlinkyUnsubscribed(u16),
+    TimeSet(DateTime),
 }
 
 static APP_CHANNEL: Channel<CriticalSectionRawMutex, AppEvent, 3> = Channel::new();
 
 /// Default desired minimum connection interval (units of 1.25ms) //20
-const DEFAULT_DESIRED_MIN_CONN_INTERVAL: u16 = 20;
-/// Default desired maximum connection interval (units of 1.25ms)
-const DEFAULT_DESIRED_MAX_CONN_INTERVAL: u16 = 160;
+const DEFAULT_DESIRED_MIN_CONN_INTERVAL: u16 = 6;
+/// Default desired maximum connection interval (units of 1.25ms) //160
+const DEFAULT_DESIRED_MAX_CONN_INTERVAL: u16 = 3200;
 /// Default desired slave latency to use if parameter update request
 const DEFAULT_DESIRED_SLAVE_LATENCY: u16 = 1;
 /// Default supervision timeout value (units of 10ms)
 const DEFAULT_DESIRED_CONN_TIMEOUT: u16 = 1000;
 
-pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::EventSubscriber) -> ! {
+pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::EventSubscriber, mut rtc:  ch58x_hal::rtc::Rtc ) -> ! {
     // Profile State Change Callbacks
     unsafe extern "C" fn on_gap_state_change(new_state: gapRole_States_t, event: *mut gapRoleEvent_t) {
         log!("in on_gap_state_change: {}", new_state);
@@ -425,13 +430,13 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
             // if advertising stopped
             GAPROLE_WAITING if LAST_STATE == GAPROLE_ADVERTISING => {
                 // // if fast advertising switch to slow
-                if GAP_GetParamValue(TGAP_DISC_ADV_INT_MIN) == DEFAULT_FAST_ADV_INTERVAL {
-                    let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, DEFAULT_SLOW_ADV_INTERVAL);
-                    let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, DEFAULT_SLOW_ADV_INTERVAL);
-                    let _ = GAP_SetParamValue(TGAP_GEN_DISC_ADV_MIN, DEFAULT_SLOW_ADV_DURATION);
-                    let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &true as *const _ as _);
-                }
-                // let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &false as *const _ as _);
+                // if GAP_GetParamValue(TGAP_DISC_ADV_INT_MIN) == DEFAULT_FAST_ADV_INTERVAL {
+                //     let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, DEFAULT_SLOW_ADV_INTERVAL);
+                //     let _ = GAP_SetParamValue(TGAP_DISC_ADV_INT_MAX, DEFAULT_SLOW_ADV_INTERVAL);
+                //     let _ = GAP_SetParamValue(TGAP_GEN_DISC_ADV_MIN, DEFAULT_SLOW_ADV_DURATION);
+                //     let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &true as *const _ as _);
+                // }
+                let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &false as *const _ as _);
 
             }
             // if started
@@ -490,7 +495,7 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
             Either::Second(event) => match event {
                 AppEvent::Connected(conn_handle) => unsafe {
                     // 1600 * 625 us
-                    Timer::after(Duration::from_secs(1)).await; // FIXME: spawn handler
+                    Timer::after(Duration::from_millis(500)).await; // FIXME: spawn handler
 
                     GAPRole_PeripheralConnParamUpdateReq(
                         conn_handle,
@@ -513,6 +518,13 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                 AppEvent::BlinkySubscribed(conn_handle) =>  {
                     // spawner.spawn(blinky_notification(conn_handle)).unwrap();
                 },
+                AppEvent::TimeSet(ct) => {
+                    log!("TimeSet event: {:04}-{:02}-{:02} {:02}:{:02}:{:02}", ct.year, ct.month, ct.day, ct.hour, ct.minute, ct.second);
+                    // let mut rtc = Rtc {};                    
+                    rtc.set_datatime(ct);
+                    // maybe do something else
+                    unsafe{soft_reset();}
+                }
                 _ => {
                     // other event. just broadcast
                 }

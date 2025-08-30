@@ -5,9 +5,11 @@ use core::{ptr, slice};
 
 use ch58x_hal::ble::gatt_uuid;
 use ch58x_hal::rtc::Rtc;
+use ch58x_hal::soft_reset;
 use hal::ble::ffi::*;
 use hal::ble::gatt::*;
 use hal::ble::gattservapp::*;
+use super::{APP_CHANNEL, AppEvent};
 
 use crate::log;
 
@@ -123,18 +125,23 @@ pub unsafe fn rtc_get_time() -> CurrentTime {
     let now = rtc.now();
 
     CURRENT_TIME_VALUE = CurrentTime::from_datetime(&now);
+    log!("CUR TIME ARRAY: {:X?}", CURRENT_TIME_VALUE.to_bytes());
     CURRENT_TIME_VALUE
 }
 
 pub fn rtc_set_time(ct: CurrentTime) {
-    let mut rtc = Rtc {};
+    // let mut rtc = Rtc {};
     let now = ct.to_datetime();
     
-    rtc.set_datatime(now);
+    // rtc.set_datatime(now);
     // using RTC here seems to crash something lol.
     // the time should probably be pushed to some queue and set in another context
     log!("MOCK SET TODO: {:02}:{:02}:{:02} {:02}/{:02}/{}",
             now.hour, now.minute, now.second, now.month, now.day, now.year);
+
+    let _ = APP_CHANNEL.try_send(AppEvent::TimeSet(now));
+    // //reset board 
+    // unsafe{soft_reset();}
 }
 
 // GATT Attribute Table
