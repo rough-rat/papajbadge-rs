@@ -16,6 +16,7 @@ use hal::{ble};
 use crate::ble_periph::current_time_service::CurrentTime;
 // use crate::ble_periph::hid_service::keypresser;
 use crate::log;
+use crate::rtc_loop::rtc_loop;
 
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
@@ -437,6 +438,8 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                 //     let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &true as *const _ as _);
                 // }
                 let _ = GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, 1, &false as *const _ as _);
+                let _ = APP_CHANNEL.try_send(AppEvent::Disconnected(CONN_HANDLE));
+
 
             }
             // if started
@@ -514,6 +517,7 @@ pub async fn peripheral(spawner: Spawner, task_id: u8, mut subscriber: ble::Even
                 AppEvent::Disconnected(conn_handle) => unsafe {
                     // GATTServApp::init_char_cfg(conn_handle, BLINKY_CLIENT_CHARCFG.as_mut_ptr());
                     // GATTServApp::init_char_cfg(conn_handle, crate::ble_periph::hid_service::HID_INPUT_CCCD.as_mut_ptr());
+                    rtc_loop(rtc, spawner);
                 },
                 AppEvent::BlinkySubscribed(conn_handle) =>  {
                     // spawner.spawn(blinky_notification(conn_handle)).unwrap();

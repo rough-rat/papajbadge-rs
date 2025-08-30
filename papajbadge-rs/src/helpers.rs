@@ -31,7 +31,9 @@ pub fn enable_sleep(){
         with_safe_access(||{
             // wakeup from RTC ISR, memory stays active (?)
             sys.slp_wake_ctrl().modify(|_, w| {
-                w.slp_rtc_wake().bit(true).wake_ev_mode().bit(false)
+                w.slp_rtc_wake().bit(true)
+                    .slp_gpio_wake().bit(true)
+                    .wake_ev_mode().bit(false)
             });
         });
         with_safe_access(||{

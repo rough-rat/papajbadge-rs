@@ -20,17 +20,24 @@ use papajbadge_rs::log;
 use helpers::{blinky, enter_sleep};
 
 use papajbadge_rs::logger::init as init_logger;
+use embassy_executor::Spawner;
 
 use hal::uart::UartTx;
 
-#[qingke_rt::entry]
-fn main() -> ! {
+use abc::AbcIter;
+use embassy_time::{Delay, Duration, Timer};
+use papajbadge_rs::rtc_loop::rtc_loop;
+
+#[embassy_executor::main(entry = "qingke_rt::entry")]
+async fn main(spawner: Spawner) -> ! {
     let mut config = hal::Config::default(); 
     config.low_power = true; //800uA->150uA
     let p = hal::init(config);
 
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
     ena.set_low();
+
+    let _ = Output::new(p.PA9, Level::Low, OutputDrive::_20mA);
 
     let but = Input::new(p.PB22, Pull::None);
 
@@ -46,35 +53,9 @@ fn main() -> ! {
         let led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
         blinky(led);
     } else {
-        let mut led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
-        led.set_high();
+        // let mut led = Output::new(p.PA8, Level::Low, OutputDrive::_5mA);
+        // led.set_high();
 
-        rtc.enable_timing(hal::rtc::TimingMode::_0_5S);
-        rtc.ack_timing();
-
-        unsafe {
-            qingke::pfic::enable_interrupt(Interrupt::RTC as u8);
-        }
-        enable_sleep();
-
-        rtc_loop(rtc, led);
-    }
-}
-
-
-fn rtc_loop(rtc: Rtc, mut led: Output<'_, ch58x_hal::peripherals::PA8>) -> ! {
-    let mut counter: u32 = 0;
-    let mut delay = CycleDelay;
-
-    loop{
-        led.toggle();
-
-        enter_sleep();       
-        delay.delay_us(1000);
-        let now = rtc.now();
-        log!("T{:02}:{:02}:{:02}, loop {}\n", 
-            now.hour, now.minute, now.second, counter);
-        counter += 1;
-        delay.delay_us(500);
+        rtc_loop(rtc, spawner);
     }
 }

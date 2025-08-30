@@ -17,8 +17,8 @@ use qingke_rt::highcode;
 
 pub mod helpers;
 pub mod logger;
+pub mod rtc_loop;
 
-// use crate::ble_periph;
 pub mod ble_periph;
 
 #[allow(unused)]
@@ -44,8 +44,8 @@ pub fn get_configured_rtc() -> Rtc {
     if now.year < 2025 {
         log!("RTC not set, setting to a meaningless random date");
         rtc.set_datatime(
-            DateTime { year: 2025, month: 4, day: 2,
-                hour: 21,minute: 36, second: 0,
+            DateTime { year: 2021, month: 4, day: 2,
+                hour: 21,minute: 36, second: 30,
                 millisecond: 0,
             }
         );
@@ -90,6 +90,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     // }
     loop{
         enter_sleep();
-        led.toggle();
+        led.toggle(); 
     }
 }

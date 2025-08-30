@@ -12,8 +12,38 @@ use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log, tmos_mainloop};
 
 use papajbadge_rs::ble_periph::{common_init, devinfo_init, peripheral};
-use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
+// use papajbadge_rs::ble_periph::blinky_service::{blinky_init, blinky_service_loop};
 use papajbadge_rs::ble_periph::current_time_service::current_time_init;
+
+use embassy_time::Duration;
+use embassy_time::Timer;
+use ch58x_hal::gpio::AnyPin;
+
+use papajbadge_rs::rtc_loop::play_abc;
+
+
+static minibarka: &'static [u8] = b"
+    X:1
+    T:Barka
+    M:4/8
+    L:1/8
+    R:jig
+    K:C
+    DEFE | DC x2 |
+    ";
+
+#[embassy_executor::task]
+async fn async_blink(pin: AnyPin) {
+    let mut led = Output::new(pin, Level::Low, OutputDrive::_5mA);
+
+    loop {
+        led.set_high();
+        Timer::after(Duration::from_millis(150)).await;
+        led.set_low();
+        Timer::after(Duration::from_millis(150)).await;
+    }
+}
+
 
 #[embassy_executor::main(entry = "qingke_rt::entry")]
 async fn main(spawner: Spawner) -> ! {
@@ -24,12 +54,19 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut ena = Output::new(p.PA4, Level::Low, OutputDrive::_5mA);
     ena.set_low();
+    let _ = Output::new(p.PA9, Level::Low, OutputDrive::_20mA);
 
     let serial = UartTx::new(p.UART0, p.PB7, Default::default()).unwrap();
     init_logger(serial);
     log!("\n\n\nHello World!");
 
-    spawner.spawn(blinky_service_loop(p.PA8.degrade())).unwrap();
+    let ledpin = unsafe { ch58x_hal::peripherals::PA8::steal() };
+    let mut led = Output::new(ledpin, Level::Low, OutputDrive::_5mA);
+
+    play_abc(minibarka);
+    led.set_high();
+
+    // spawner.spawn(async_blink(p.PA8.degrade())).unwrap();
 
     let rtc = get_configured_rtc();
 
@@ -48,7 +85,7 @@ async fn main(spawner: Spawner) -> ! {
     unsafe {
         common_init();
         devinfo_init();
-        blinky_init();
+        // blinky_init();
         current_time_init();
     }
 
