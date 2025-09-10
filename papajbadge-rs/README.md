@@ -112,7 +112,7 @@ You may also customize yout workflow with .cargo/config.toml.
         - [x] run BLE connection (using examples from hal)
         - [x] run bluetooth scan/ADV reception 
 - [ ] firmware
-    - [ ] integrate embassy async
+    - [x] integrate embassy async
     - [ ] UART not working in debug builds (clock not settable in debug other than 6mhz)
     - [x] UART logging
     - [ ] bluetooth features

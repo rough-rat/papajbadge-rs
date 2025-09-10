@@ -54,17 +54,36 @@
             border-color: #c3e6cb;
             color: #155724;
         }
+        /* New info section styling */
+        .info {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Bluetooth Current Time Service Writer</h1>
+        <h1>Papajbadge's BLE Current Time Service Writer</h1>
+
         <p>This app connects to a Bluetooth device and writes the current time to its Current Time Service.</p>
-        <p>Use chromium, and enable "Experimental Web Platform features"</p>
-        
+        <p>It has been tested with chrome on android, other platfoms tend to throw an error on the badge side.</p>
+        <p>The rootcause is still tbd.</p>
+        <p>On PC, you may try to use chrome, enable "Experimental Web Platform features"</p>
+
+        <!-- Filter toggle -->
+        <label style="display:block; margin: 8px 0;">
+            <input type="checkbox" id="filterCtsCheckbox">
+            Show only devices advertising Current Time Service (0x1805)
+        </label>
+
         <button id="connectBtn">Connect to Device</button>
         <button id="readTimeBtn" disabled>Read Device Time</button>
         <button id="writeTimeBtn" disabled>Write Current Time</button>
+        <!-- New Disconnect button -->
+        <button id="disconnectBtn" disabled>Disconnect</button>
         
         <div id="status" class="status">Ready to connect...</div>
         
@@ -76,11 +95,53 @@
             <h3>Device Reported Time:</h3>
             <div id="deviceTime" style="font-size: 18px; font-weight: bold;"></div>
         </div>
+
+        <!-- How-to section placeholder -->
+        <section class="info" id="howTo">
+            <h2>Badge description</h2>
+            <p>
+                This device is split into 2 parts - the idea was to make both parts independent and reusable (#eko)
+                It is based on CH583 BLE-capable RISC-V module. This rather obscure MCU has been choosen due to it's price,
+                low-power capabilities, existing rust support and bluetooth capabilities. Also, the new CH572 costs ~$0.40, and
+                I want to try this one next.
+            </p>
+            <p>
+                According to rough calculations, it should work ~40 days on CR2032 battery, mostly staying in sleep mode, and
+                waking up just to play barka each day, everyday. The badges wake up each second, to check if the time has come,
+                and to check whether any of the buttons has been pressed. Because of that, buttons must be pressed for up to 1s
+                to work.
+            </p>
+            <p>
+                The upper button is "boot" button, and normally it is needed to set the MCU into bootloader mode, when 
+                programming via USB interface (the default one). In our case, it simply lights the LEDs for 5 seconds, and goes 
+                back to sleeping again.
+            </p><p>
+                The lower one is the "reset" button, but it actually kinda doesn't reset the board at all, and I did not have
+                time to examine why yet. The sleep loop checks if it was working, and if pressed, it simply reboots the firmware. 
+                It then plays the intro tune, and enters BLE pairing mode for 15 seconds or so.
+            </p><p>
+                Use this website to pair with the badge and set it's internal time. It should keep the time across reboots, as 
+                long as the CR2032 is not removed. It will not play barka untill the time is set. 
+            </p><p>
+                Setting the time will cause the badge to immediatelly reboot and enter pairing mode again. This is "normal" behaviour
+                as changing RTC time was crashing the firmware no matter what I tried. I did not write the proper "disconnect" routine,
+                so the browser will not notice the device disapearing until timeout occurs.
+            </p><p>
+                Please note, the device is just for our internal MCU evaluation/learning purposes. For more info, visit 
+                <a href="https://github.com/rough-rat/papajbadge-rs">github.com/rough-rat/papajbadge-rs</a>
+            </p><p>
+                More exhaustive feature description and flashing tutorial will be delivered at a later date. This website has 
+                been shamelessly vibecoded.
+            </p>
+            
+        </section>
     </div>
 
     <script>
         let device = null;
         let currentTimeCharacteristic = null;
+        // Track notification handler so we can remove it
+        let ctsNotifyHandler = null;
         
         const CURRENT_TIME_SERVICE_UUID = 0x1805;
         const CURRENT_TIME_CHARACTERISTIC_UUID = 0x2A2B;
@@ -88,9 +149,11 @@
         const connectBtn = document.getElementById('connectBtn');
         const writeTimeBtn = document.getElementById('writeTimeBtn');
         const readTimeBtn = document.getElementById('readTimeBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
         const statusDiv = document.getElementById('status');
         const currentTimeDiv = document.getElementById('currentTime');
         const deviceTimeDiv = document.getElementById('deviceTime');
+        const filterCtsCheckbox = document.getElementById('filterCtsCheckbox');
         
         function updateCurrentTimeDisplay() {
             const now = new Date();
@@ -179,6 +242,25 @@
             }
         }
         
+        function resetUiAfterDisconnect(message = 'Device disconnected') {
+            updateStatus(message, 'error');
+            connectBtn.textContent = 'Connect to Device';
+            connectBtn.disabled = false;
+            writeTimeBtn.disabled = true;
+            readTimeBtn.disabled = true;
+            disconnectBtn.disabled = true;
+            deviceTimeDiv.textContent = '';
+            // Clean up notification handler
+            try {
+                if (currentTimeCharacteristic && ctsNotifyHandler) {
+                    currentTimeCharacteristic.removeEventListener('characteristicvaluechanged', ctsNotifyHandler);
+                }
+            } catch (_) { /* ignore */ }
+            ctsNotifyHandler = null;
+            device = null;
+            currentTimeCharacteristic = null;
+        }
+
         connectBtn.addEventListener('click', async () => {
             try {
                 if (!('bluetooth' in navigator)) {
@@ -189,21 +271,25 @@
                 }
 
                 updateStatus('Scanning for devices...');
+
+                // Build request options based on checkbox
+                let requestOptions;
+                if (filterCtsCheckbox && filterCtsCheckbox.checked) {
+                    requestOptions = {
+                        filters: [{ services: [CURRENT_TIME_SERVICE_UUID] }],
+                        optionalServices: [CURRENT_TIME_SERVICE_UUID]
+                    };
+                } else {
+                    requestOptions = {
+                        acceptAllDevices: true,
+                        optionalServices: [CURRENT_TIME_SERVICE_UUID]
+                    };
+                }
                 
-                device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [CURRENT_TIME_SERVICE_UUID]
-                });
+                device = await navigator.bluetooth.requestDevice(requestOptions);
 
                 device.addEventListener('gattserverdisconnected', () => {
-                    updateStatus('Device disconnected', 'error');
-                    connectBtn.textContent = 'Connect to Device';
-                    connectBtn.disabled = false;
-                    writeTimeBtn.disabled = true;
-                    readTimeBtn.disabled = true;
-                    deviceTimeDiv.textContent = '';
-                    device = null;
-                    currentTimeCharacteristic = null;
+                    resetUiAfterDisconnect('Device disconnected');
                 });
                 
                 updateStatus('Connecting to device...');
@@ -228,6 +314,7 @@
                 connectBtn.disabled = true;
                 writeTimeBtn.disabled = false;
                 readTimeBtn.disabled = false;
+                disconnectBtn.disabled = false;
 
                 try {
                     updateStatus('Reading current time from device...');
@@ -240,13 +327,14 @@
                 try {
                     if (currentTimeCharacteristic.properties && currentTimeCharacteristic.properties.notify) {
                         await currentTimeCharacteristic.startNotifications();
-                        currentTimeCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+                        ctsNotifyHandler = (event) => {
                             const dv = event.target.value;
                             const date = dataViewToDate(dv);
                             if (date) {
                                 deviceTimeDiv.textContent = date.toLocaleString();
                             }
-                        });
+                        };
+                        currentTimeCharacteristic.addEventListener('characteristicvaluechanged', ctsNotifyHandler);
                         console.log('CTS notifications enabled');
                     }
                 } catch (e) {
@@ -293,6 +381,35 @@
             } catch (error) {
                 updateStatus(`Error reading time: ${error.message}`, 'error');
                 console.error('Read failed:', error);
+            }
+        });
+
+        // New: manual disconnect
+        disconnectBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('Disconnecting...');
+                // Stop notifications and remove listeners if possible
+                try {
+                    if (currentTimeCharacteristic) {
+                        if (ctsNotifyHandler) {
+                            currentTimeCharacteristic.removeEventListener('characteristicvaluechanged', ctsNotifyHandler);
+                            ctsNotifyHandler = null;
+                        }
+                        if (typeof currentTimeCharacteristic.stopNotifications === 'function') {
+                            await currentTimeCharacteristic.stopNotifications();
+                        }
+                    }
+                } catch (e) {
+                    console.log('Stopping notifications failed:', e);
+                }
+                // Disconnect GATT
+                if (device && device.gatt && device.gatt.connected) {
+                    device.gatt.disconnect();
+                }
+                resetUiAfterDisconnect('Disconnected');
+            } catch (e) {
+                console.warn('Manual disconnect error:', e);
+                resetUiAfterDisconnect('Disconnected');
             }
         });
     </script>
