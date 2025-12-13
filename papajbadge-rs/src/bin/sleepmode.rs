@@ -24,7 +24,7 @@ use embassy_executor::Spawner;
 
 use hal::uart::UartTx;
 
-use abc::AbcIter;
+use abc_note_stream::AbcIter;
 use embassy_time::{Delay, Duration, Timer};
 use papajbadge_rs::rtc_loop::rtc_loop;
 

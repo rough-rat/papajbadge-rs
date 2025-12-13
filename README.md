@@ -12,21 +12,29 @@ It contains some nessesary mess:
 You need WCH-LinkE probe - besides flashing/debugging via i-can't-belive-it's-not-SWD 
 dual wire interface, you may also use 3V3 for power and RX for logs via UART.
 
-Do not use WCH-Link, it nearly works, but contains some bugs, and does not work.
+Do not use the WCH-Link probe, it nearly works, but is too buggy to be useful.
 
 ## The workflow
 
 ### Setup
 
-Install rustup and wlink. On Nix(OS), `nix-shell` to use `shell.nix`.
+Requirements:
+
+* Rustup - google "rustup" (or use your package manager). You may need to uninstall native rust package first.
+* wlink - `cargo install wlink` (or use your package manager)
+
+On Nix(OS), `nix-shell` to use `shell.nix`.
 
 ### Building
 
-`cargo build --release`
+Final firmware: `cargo build --release --bin cebula_fw`
 
-This will build the default binary (`audio_player.rs`).
+Additional targets may be found in `papajbadge-rs/src/bin` directory.
 
-Debug builds are currently broken - see below.
+Use `--release`, due to PAC bug, debug builds are unable to set some board parameters,
+and are stuck with default 12 MHz clock, rendering bluetooth and serial output useless.
+
+GDB may still be used with debug builds.
 
 ### Flashing as the WCH intended (via USB)
 
@@ -46,7 +54,11 @@ Connect the device, and call `make mcu-unlock`
 
 ### flashing via not-SWD
 
-After unprotecting the chip, `wlink -v flash <BINARY>`
+`wlink -v flash <BINARY>`
+
+example: `wlink flash ../target/riscv32imac-unknown-none-elf/release/cebula_fw`
+
+You may need to unlock the chip first. 
 
 ### not-SWD + GDB workflow
 

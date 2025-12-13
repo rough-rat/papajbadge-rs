@@ -3,8 +3,9 @@
 version = 4
 
 [[package]]
-name = "abc"
+name = "abc-note-stream"
 version = "0.1.0"
+source = "git+https://github.com/rough-rat/abc-note-stream#9f72509809c04dcf5f5b21c71ebe302bebf6b3bd"
 
 [[package]]
 name = "bit_field"
@@ -363,7 +364,7 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 name = "papajbadge-rs"
 version = "0.2.136"
 dependencies = [
- "abc",
+ "abc-note-stream",
  "ch58x-hal",
  "critical-section",
  "defmt",

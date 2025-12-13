@@ -20,7 +20,7 @@ use papajbadge_rs::helpers::{enable_sleep, enter_sleep};
 use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log};
 // Import ABC parser from local crate
-use abc::AbcIter;
+use abc_note_stream::AbcIter;
 
 
 #[embassy_executor::task]

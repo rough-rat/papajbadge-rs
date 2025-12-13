@@ -38,4 +38,4 @@ embassy-sync = { version = "0.5.0", optional = true }
 embassy-time = { version = "0.3.0" }
 embassy-time-driver = { version = "0.1.0", features = ["tick-hz-32_768"] }
 
-abc = { path = "../abc" }
+abc-note-stream = { git = "https://github.com/rough-rat/abc-note-stream" }

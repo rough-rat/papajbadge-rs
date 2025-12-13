@@ -1,5 +1,6 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(type_alias_impl_trait)]
+#![feature(generic_const_exprs)]
 #![no_std]
 
 
@@ -18,6 +19,7 @@ use qingke_rt::highcode;
 pub mod helpers;
 pub mod logger;
 pub mod rtc_loop;
+pub mod sr_led_driver;
 
 pub mod ble_periph;
 

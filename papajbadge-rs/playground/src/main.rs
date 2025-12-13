@@ -1,4 +1,4 @@
-use abc::{AbcIter, Event};
+use abc_note_stream::{AbcIter, Event};
 
 fn main() {
     let abc = b"
@@ -20,4 +20,3 @@ E3 E3-  | E2 E F2 D | C3 C3- | C6
         println!("{:?}", ev);
     }
 }
-

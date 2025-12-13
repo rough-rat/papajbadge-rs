@@ -89,7 +89,7 @@ async fn main(spawner: Spawner) -> ! {
         current_time_init();
     }
 
-    // Main_Circulation
+    // Spawn a processor for WCH's "os" that runs in parallel with Embassy 
     spawner.spawn(tmos_mainloop()).unwrap();
 
     // Application code

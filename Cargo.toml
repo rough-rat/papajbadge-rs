@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["abc", "papajbadge-rs"]
+members = ["papajbadge-rs"]
 default-members = ["papajbadge-rs"]
 
 [profile.dev]
