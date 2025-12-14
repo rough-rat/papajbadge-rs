@@ -25,9 +25,12 @@ pub fn init<'a>(uart: UartTx<'a, peripherals::UART0>) {
 #[inline(always)]
 pub fn log_args(args: fmt::Arguments) {
     critical_section::with(|cs| {
-        if let Some(uart) = SERIAL.borrow(cs).borrow_mut().as_mut() {
-            let _ = uart.write_fmt(args);
-            let _ = uart.write_str("\n");
+        let cell = SERIAL.borrow(cs);
+        if let Ok(mut uart_ref) = cell.try_borrow_mut() {
+            if let Some(uart) = uart_ref.as_mut() {
+                let _ = uart.write_fmt(args);
+                let _ = uart.write_str("\n");
+            }
         }
     });
 }

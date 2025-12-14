@@ -104,6 +104,15 @@ where
         }
     }
 
+    /// Set a single LED value in the current frame.
+    pub fn set_led(&self, index: usize, value: u8) -> Result<()> {
+        if index >= N {
+            return Err(SrDriverError::OutOfBounds);
+        }
+        self.frame[index].set(value);
+        Ok(())
+    }
+
     /// Enable the shift register outputs (active low OE).
     pub fn enable_output(&mut self) {
         self.oe.set_low();
@@ -128,10 +137,12 @@ where
     ///
     /// For now every non-zero value is treated as LED "on".
     pub fn update(&mut self) {
+        self.disable_output();
         self.pack_frame();
         let data = unsafe { &*self.spi_buf.get() };
         let _ = self.spi.blocking_write(data);
         self.latch();
+        self.enable_output();
     }
 
     /// Helper used by [`Self::update`] to pack cells into the SPI buffer.
@@ -144,6 +155,9 @@ where
                 let bit = idx % 8;
                 spi_buf[byte] |= 1 << bit;
             }
+        }
+        for chunk in spi_buf.chunks_exact_mut(2) {
+            chunk.swap(0, 1);
         }
     }
 

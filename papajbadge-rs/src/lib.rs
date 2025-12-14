@@ -20,6 +20,7 @@ pub mod helpers;
 pub mod logger;
 pub mod rtc_loop;
 pub mod sr_led_driver;
+pub use ledface_layout as ledface_layout;
 
 pub mod ble_periph;
 

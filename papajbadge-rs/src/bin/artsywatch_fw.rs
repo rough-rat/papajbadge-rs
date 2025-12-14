@@ -13,6 +13,7 @@ use hal::ble;
 use papajbadge_rs::logger::init as init_logger;
 use papajbadge_rs::{get_configured_rtc, log, tmos_mainloop};
 use papajbadge_rs::sr_led_driver::SrLedDriver;
+use papajbadge_rs::ledface_layout::Layout;
 
 use papajbadge_rs::ble_periph::{common_init, devinfo_init, peripheral};
 use papajbadge_rs::ble_periph::current_time_service::current_time_init;
@@ -20,6 +21,22 @@ use papajbadge_rs::ble_periph::current_time_service::current_time_init;
 use embassy_time::Duration;
 use embassy_time::Timer;
 use ch58x_hal::gpio::AnyPin;
+
+const TEST_LAYOUT_JSON: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../ledface_layout/test/test.json"
+));
+const COMPILED_LAYOUT_BYTES: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/watchface_layout.bin"));
+
+type WatchLayout = Layout<48, 4, 48>;
+
+fn load_layout() -> Option<WatchLayout> {
+    match Layout::from_bytes(COMPILED_LAYOUT_BYTES) {
+        Ok(layout) => Some(layout),
+        Err(_) => Layout::from_json(TEST_LAYOUT_JSON).ok(),
+    }
+}
 
 #[embassy_executor::task]
 async fn async_blink(pin: AnyPin) {
@@ -37,28 +54,55 @@ async fn async_blink(pin: AnyPin) {
 async fn sr_driver_task(mut sr_driver: SrLedDriver<'static, peripherals::SPI0, 48>) -> ! {
     log!("Shift register driver task started");
     sr_driver.enable_output();
+    let mut layout = load_layout();
+    if let Some(ref layout) = layout {
+        log!(
+            "Loaded LED layout: {} LEDs, {} entities",
+            layout.led_count(),
+            layout.entities.len()
+        );
+    } else {
+        log!("Layout unavailable, using direct LED writes");
+    }
 
-    let mut lfsr: u32 = 0xACE1_1234;
     let mut frame = [0u8; 48];
+    let mut text_angle: u16 = 0;
+    let mut wave_angle: u16 = 0;
+    let mut direct_index: usize = 0;
+    let mut iteration: u32 = 0;
     loop {
-        for (i, byte) in frame.iter_mut().enumerate() {
-            // Simple xorshift32 PRNG for repeatable-yet-varied patterns.
-            lfsr ^= lfsr << 13;
-            lfsr ^= lfsr >> 17;
-            lfsr ^= lfsr << 5;
-            let val = lfsr as u8 ^ (i as u8);
-            if val > 128 {
-                *byte = 0xFF;
-            } else {
-                *byte = 0x00;
+        iteration = iteration.wrapping_add(1);
+
+        if let Some(layout_ref) = layout.as_ref() {
+            frame.fill(0);
+
+            if let Some(text) = layout_ref.entity("Text") {
+                text.set_degrees(text_angle, &mut frame);
             }
+            if let Some(wave) = layout_ref.entity("Wave") {
+                wave.set_degrees(wave_angle, &mut frame);
+            }
+
+            text_angle = (text_angle + 5) % 360;
+            wave_angle = (wave_angle + 5) % 360;
+
+            if let Err(err) = sr_driver.write(0, &frame) {
+                log!("Frame write error {:?}, switching to direct mode", err);
+                layout = None;
+                continue;
+            }
+        // } else {
+            // sr_driver.clear();
+            // sr_driver
+            //     .set_led(direct_index, 0xFF)
+            //     .expect("direct LED index out of range");
+
+            // direct_index = (direct_index + 1) % sr_driver.len();
         }
 
-        sr_driver.write(0, &frame).unwrap();
+        log!("SR iteration {}", iteration);
         sr_driver.update();
-        sr_driver.enable_output();
-        Timer::after(Duration::from_millis(500)).await;
-        sr_driver.disable_output();
+        Timer::after(Duration::from_millis(200)).await;
     }
 }
 
@@ -83,11 +127,8 @@ async fn main(spawner: Spawner) -> ! {
     // LAT - PA9  (Latch, directly GPIO-controlled)
 
     // Initialize shift register LED driver from pins
-    let mut sr_driver = 
-        SrLedDriver::<_, 48>::new_from_pins::<false, _, _, _, _>
-        (
-            p.SPI0, p.PA13, p.PA14, p.PA8, p.PA9
-    );
+    let mut sr_driver =
+        SrLedDriver::<_, 48>::new_from_pins::<false, _, _, _, _>(p.SPI0, p.PA13, p.PA14, p.PA8, p.PA9);
 
     log!("Shift register driver initialized");
     log!("  SPI: SCK=PA13, DAT=PA14");
@@ -112,6 +153,11 @@ async fn main(spawner: Spawner) -> ! {
     ble_config.mac_addr = [0x21, 0x37, 0x04, 0x20, 0x69, 0x96].into();
     let (task_id, sub) = hal::ble::init(ble_config).unwrap();
     log!("BLE hal task id: {}", task_id);
+
+    loop {
+        Timer::after(Duration::from_secs(1)).await;
+        log!("Heartbeat: main alive");
+    }
 
     unsafe {
         common_init();
