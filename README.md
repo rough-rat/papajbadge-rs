@@ -1,5 +1,15 @@
 # papajbadge-rs
 
+> **This repository is archived.** Development continues in:
+>
+> - **papajbadge firmware**: [`firmware/` in rough-rat/papajbadge](https://github.com/rough-rat/papajbadge/tree/main/firmware)
+> - **artsywatch firmware**: [`firmware/` in rough-rat/artsywatch](https://github.com/rough-rat/artsywatch/tree/main/firmware)
+> - **cyberlamp firmware**: [`firmware/` in cr1tbit/cyberlamp](https://github.com/cr1tbit/cyberlamp/tree/main/firmware)
+> - **shared code and CH58x examples**: [cr1tbit/ch58x-rs-playground](https://github.com/cr1tbit/ch58x-rs-playground) (continues this repository's history)
+> - **HAL**: [cr1tbit/ch58x-hal](https://github.com/cr1tbit/ch58x-hal), a fork of ch32-rs/ch58x-hal with fixes for qingke-rt 0.5 / embassy 0.7
+>
+> The content below describes the state at the time of archiving.
+
 This repo contains firmware for papajbadge
 
 It contains some nessesary mess:
